@@ -1,72 +1,94 @@
 # agent-terminal CLI Reference
 
-All commands default to `--session agent-terminal` unless specified.
+Complete reference for every command, flag, and option.
+
+All commands default to `--session agent-terminal` when `--session` is not specified.
 
 ---
 
 ## Lifecycle
 
-### `open`
+### `open <command>`
 
-Launch a command in a new tmux session.
+Launch a command inside a new tmux session.
+
+**Syntax:**
 
 ```
-agent-terminal open "<command>" [OPTIONS]
+agent-terminal open "<command>" [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Create a named pane within an existing session (splits horizontally) |
-| `--env <KEY=VAL>` | none | Set environment variables (repeatable) |
-| `--size <COLSxROWS>` | tmux default | Initial terminal size (e.g., `80x24`) |
+**Flags:**
 
-The command is wrapped to capture stderr to `/tmp/agent-terminal-<session>-stderr` and exit code to `/tmp/agent-terminal-<session>-exit`.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Name for the tmux session |
+| `--pane` | string | _(none)_ | Named pane within the session |
+| `--env` | string | _(none)_ | Environment variable in `KEY=VAL` format. Repeatable. |
+| `--size` | string | _(none)_ | Initial terminal dimensions as `COLSxROWS` |
 
-Waits up to 2 seconds for the first non-empty render before returning.
-
-Prints the session name on success.
+**Examples:**
 
 ```bash
-agent-terminal open "htop"
-agent-terminal open "cargo run" --session myapp --size 120x40
-agent-terminal open "./server" --session myapp --pane server
-agent-terminal open "./my-app" --env TERM=dumb --env NO_COLOR=1
-agent-terminal open "python app.py" --session py --size 40x10 --env LANG=C
+# Basic launch
+agent-terminal open "./my-app"
+
+# Named session with custom size
+agent-terminal open "./my-app" --session test1 --size 120x40
+
+# With environment variables
+agent-terminal open "./my-app" --session test1 --env NO_COLOR=1 --env TERM=dumb
+
+# Named pane for multi-pane setups
+agent-terminal open "./server" --session multi --pane server
 ```
+
+---
 
 ### `close`
 
-Kill a tmux session and clean up temp files.
+Kill a tmux session and clean up associated temp files.
+
+**Syntax:**
 
 ```
-agent-terminal close [OPTIONS]
+agent-terminal close [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session to close |
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to kill |
+
+**Examples:**
 
 ```bash
 agent-terminal close
-agent-terminal close --session myapp
+agent-terminal close --session test1
 ```
+
+---
 
 ### `list`
 
-List all active tmux sessions.
+List all active tmux sessions managed by agent-terminal.
+
+**Syntax:**
 
 ```
 agent-terminal list
 ```
 
-No flags. Shows session name, creation timestamp, and window count. Sessions with names starting with `agent-terminal` are tagged.
+**Flags:** None.
+
+**Example:**
 
 ```bash
 agent-terminal list
-# SESSION                        CREATED                  WINDOWS
-# agent-terminal                 1711234567               1 [agent-terminal]
-# myapp                          1711234500               2
+# Output:
+# agent-terminal  (80x24, pid 12345, alive)
+# test1           (120x40, pid 12346, alive)
 ```
 
 ---
@@ -75,257 +97,382 @@ agent-terminal list
 
 ### `snapshot`
 
-Capture the current terminal content.
+Capture the current terminal screen contents. This is the primary observation command.
+
+**Syntax:**
 
 ```
-agent-terminal snapshot [OPTIONS]
+agent-terminal snapshot [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Target pane |
-| `--color` | off | Annotate lines with parsed color/style info |
-| `--raw` | off | Raw byte stream with ANSI escapes, no formatting |
-| `--ansi` | off | ANSI escapes preserved, with row numbers and header |
-| `--json` | off | Structured JSON with text + color spans |
-| `--diff` | off | Diff against the previous snapshot |
-| `--scrollback <N>` | none | Include N lines of scrollback above viewport |
+**Flags:**
 
-Output modes are mutually exclusive. Default is plain text with row numbers:
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to capture |
+| `--pane` | string | _(none)_ | Named pane to capture |
+| `--color` | bool | `false` | Include style annotations per line |
+| `--raw` | bool | `false` | Raw byte stream with no formatting |
+| `--ansi` | bool | `false` | Raw ANSI escape sequences with row numbers |
+| `--json` | bool | `false` | Full structured JSON output |
+| `--diff` | bool | `false` | Show only rows that changed since last snapshot |
+| `--scrollback` | integer | _(none)_ | Include N lines of scrollback above viewport |
 
-```
-[size: 80x24  cursor: 3,12  session: agent-terminal]
------------------------------------------
-  1| File  Edit  View  Help
-  2| ---------------------
-  3| > item one
-  4|   item two
-  5|   item three
-```
+Output format flags (`--color`, `--raw`, `--ansi`, `--json`, `--diff`) are mutually exclusive. See [snapshot-format.md](snapshot-format.md) for format details.
+
+**Examples:**
 
 ```bash
-agent-terminal snapshot
-agent-terminal snapshot --color --session myapp
-agent-terminal snapshot --json --session myapp
-agent-terminal snapshot --raw --session myapp
-agent-terminal snapshot --diff --session myapp
-agent-terminal snapshot --scrollback 50 --session myapp
+# Default plain-text snapshot
+agent-terminal snapshot --session test1
+# [size: 80x24  cursor: 1,0  session: test1]
+# -----------------------------------------
+#   1| Welcome to my-app
+#   2| > Option A
+#   3|   Option B
+
+# With color/style annotations
+agent-terminal snapshot --color --session test1
+
+# JSON for programmatic parsing
+agent-terminal snapshot --json --session test1
+
+# Diff to see what changed
+agent-terminal snapshot --diff --session test1
+
+# Include 50 lines of scrollback
+agent-terminal snapshot --scrollback 50 --session test1
 ```
+
+---
 
 ### `screenshot`
 
-Render the terminal as a PNG or HTML image.
+Render the terminal as a PNG image or HTML file.
+
+**Syntax:**
 
 ```
-agent-terminal screenshot [OPTIONS]
+agent-terminal screenshot [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--path <file>` | `screenshot.png` / `screenshot.html` | Output file path |
-| `--annotate` | off | Overlay row/column grid numbers |
-| `--html` | off | Save as HTML instead of PNG |
-| `--theme <dark\|light>` | `dark` | Color theme |
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to capture |
+| `--path` | string | auto-generated | Output file path |
+| `--annotate` | bool | `false` | Overlay row/column grid on the image |
+| `--html` | bool | `false` | Save as HTML instead of PNG |
+| `--theme` | string | `dark` | Color theme: `dark` or `light` |
+
+**Examples:**
 
 ```bash
-agent-terminal screenshot
-agent-terminal screenshot --path ./shots/test1.png --annotate
-agent-terminal screenshot --html --theme light --path report.html
+# Default PNG screenshot
+agent-terminal screenshot --session test1
+
+# Annotated with grid overlay
+agent-terminal screenshot --annotate --path ./debug.png --session test1
+
+# HTML output with light theme
+agent-terminal screenshot --html --theme light --session test1
 ```
+
+---
 
 ### `scrollback`
 
-Read the tmux scrollback buffer (content that has scrolled off screen).
+Read the tmux scrollback buffer (content that has scrolled off the visible viewport).
+
+**Syntax:**
 
 ```
-agent-terminal scrollback [OPTIONS]
+agent-terminal scrollback [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--lines <N>` | all | Limit to last N lines |
-| `--search <text>` | none | Search scrollback for text, return matching lines with context |
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to read |
+| `--lines` | integer | _(all)_ | Number of lines to return |
+| `--search` | string | _(none)_ | Search scrollback for matching text |
+
+**Examples:**
 
 ```bash
-agent-terminal scrollback --session myapp
-agent-terminal scrollback --lines 200 --session myapp
-agent-terminal scrollback --search "error" --session myapp
+# Read last 100 lines of scrollback
+agent-terminal scrollback --lines 100 --session test1
+
+# Search for errors in scrollback
+agent-terminal scrollback --search "error" --session test1
 ```
 
-### `find`
+---
 
-Search the current screen content for text.
+### `find <pattern>`
+
+Search the visible screen for text and return matching positions.
+
+**Syntax:**
 
 ```
-agent-terminal find "<pattern>" [OPTIONS]
+agent-terminal find "<pattern>" [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--all` | off | Return all matches (default: first only) |
-| `--regex` | off | Interpret pattern as regex |
-| `--color <style>` | none | Filter by color/style (e.g., `"fg:red"`, `"bold"`) |
+**Flags:**
 
-Returns `row N, col N: "context"` for each match. Exits 0 on match, 1 on no match.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to search |
+| `--all` | bool | `false` | Return all matches (not just first) |
+| `--regex` | bool | `false` | Treat pattern as a regular expression |
+| `--color` | string | _(none)_ | Search by color style (e.g., `"fg:red"`) |
+
+**Examples:**
 
 ```bash
-agent-terminal find "Error"
-agent-terminal find "Error" --all --session myapp
-agent-terminal find "v\d+\.\d+" --regex --session myapp
-agent-terminal find "" --color "fg:red" --all --session myapp    # all red text
-agent-terminal find "Warning" --color "fg:yellow" --session myapp
+# Find first occurrence
+agent-terminal find "Error" --session test1
+# Output: 5,12  (row 5, column 12)
+
+# Find all occurrences
+agent-terminal find ">" --all --session test1
+# Output:
+# 2,1
+# 7,1
+
+# Regex search
+agent-terminal find "v[0-9]+\.[0-9]+" --regex --session test1
+
+# Find by color
+agent-terminal find "Error" --color "fg:red" --session test1
 ```
 
 ---
 
 ## Interaction
 
-### `send`
+### `send <keys...>`
 
-Send one or more named key sequences to the terminal.
+Send named key sequences to the terminal. Keys are interpreted as tmux key names.
+
+**Syntax:**
 
 ```
-agent-terminal send <keys>... [OPTIONS]
+agent-terminal send <key> [<key>...] [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Target pane |
+**Flags:**
 
-Keys are sent individually via `tmux send-keys`. Use key names for special keys.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--pane` | string | _(none)_ | Target pane |
 
-**Key name examples**: `Enter`, `Escape`, `Tab`, `Space`, `BSpace` (backspace), `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PgUp`, `PgDn`, `F1`-`F12`, `C-c` (Ctrl+C), `C-a`, `C-z`, `M-x` (Alt+X).
+**Common key names:** `Enter`, `Escape`, `Tab`, `Space`, `BSpace` (backspace), `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PgUp`, `PgDn`, `F1`-`F12`, `C-c` (Ctrl+C), `C-d`, `C-z`, `M-x` (Alt+X).
+
+Single characters (`j`, `k`, `q`, `/`) are sent as-is.
+
+**Examples:**
 
 ```bash
-agent-terminal send "j"                   # single key
-agent-terminal send Enter                 # special key
-agent-terminal send C-c                   # ctrl+c
-agent-terminal send Up Up Up Enter        # multiple keys in sequence
-agent-terminal send "M-x" --session myapp # alt+x
+# Send a single key
+agent-terminal send Enter --session test1
+
+# Send multiple keys in sequence
+agent-terminal send Down Down Down Enter --session test1
+
+# Ctrl+C to interrupt
+agent-terminal send C-c --session test1
+
+# Vim-style navigation
+agent-terminal send g g --session test1    # go to top
+agent-terminal send G --session test1      # go to bottom
 ```
 
-### `type`
+---
 
-Type literal text (no key-name interpretation).
+### `type <text>`
+
+Type literal text character-by-character. Unlike `send`, no key-name interpretation occurs.
+
+**Syntax:**
 
 ```
-agent-terminal type "<text>" [OPTIONS]
+agent-terminal type "<text>" [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Target pane |
+**Flags:**
 
-Uses `tmux send-keys -l` under the hood. Characters are sent literally -- `"Enter"` types the five characters E-n-t-e-r, it does not press the Enter key.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--pane` | string | _(none)_ | Target pane |
+
+**Examples:**
 
 ```bash
-agent-terminal type "hello world" --session myapp
-agent-terminal type "grep -r 'pattern' ." --session myapp
+# Type into an input field
+agent-terminal type "hello world" --session test1
+
+# Type a search query
+agent-terminal type "/search term" --session test1
+
+# type vs send: "Enter" types the five characters E-n-t-e-r
+agent-terminal type "Enter" --session test1    # types literal "Enter"
+agent-terminal send Enter --session test1      # presses the Enter key
 ```
 
-### `paste`
+---
 
-Paste text via the tmux paste buffer. Handles special characters and multi-line text safely.
+### `paste <text>`
+
+Paste text via the tmux paste buffer. Safer than `type` for text containing special characters, newlines, or shell metacharacters.
+
+**Syntax:**
 
 ```
-agent-terminal paste "<text>" [OPTIONS]
+agent-terminal paste "<text>" [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Target pane |
+**Flags:**
 
-Loads text into a tmux buffer then pastes it. More reliable than `type` for large or multi-line text.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--pane` | string | _(none)_ | Target pane |
+
+**Examples:**
 
 ```bash
-agent-terminal paste "multi\nline\ntext" --session myapp
-agent-terminal paste "function() { return 42; }" --session myapp
+# Paste multi-line content
+agent-terminal paste "line1\nline2\nline3" --session test1
+
+# Paste text with special characters
+agent-terminal paste 'echo "hello $USER"' --session test1
 ```
 
-### `resize`
+---
 
-Resize the terminal pane and window.
+### `resize <cols> <rows>`
+
+Resize the terminal to the specified dimensions. Triggers SIGWINCH in the running process.
+
+**Syntax:**
 
 ```
-agent-terminal resize <cols> <rows> [OPTIONS]
+agent-terminal resize <cols> <rows> [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Target pane |
+**Flags:**
 
-Resizes both the tmux window and pane to the specified dimensions.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--pane` | string | _(none)_ | Target pane |
+
+**Examples:**
 
 ```bash
-agent-terminal resize 120 40 --session myapp
-agent-terminal resize 40 10 --session myapp   # small terminal test
-agent-terminal resize 200 50 --session myapp  # wide terminal test
+# Standard size
+agent-terminal resize 80 24 --session test1
+
+# Wide terminal
+agent-terminal resize 200 50 --session test1
+
+# Narrow mobile-like size
+agent-terminal resize 40 10 --session test1
 ```
 
-### `click`
+---
 
-Send a mouse click at a position (1-indexed row and column).
+### `click <row> <col>`
+
+Send a mouse click at the given position. Coordinates are 1-indexed.
+
+**Syntax:**
 
 ```
-agent-terminal click <row> <col> [OPTIONS]
+agent-terminal click <row> <col> [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--right` | off | Right click |
-| `--double` | off | Double click |
+**Flags:**
 
-Uses SGR mouse encoding. The app must have mouse support enabled.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--right` | bool | `false` | Right-click instead of left-click |
+| `--double` | bool | `false` | Double-click |
+
+**Examples:**
 
 ```bash
-agent-terminal click 5 10                          # left click at row 5, col 10
-agent-terminal click 5 10 --right --session myapp  # right click
-agent-terminal click 3 15 --double --session myapp # double click
+# Left-click at row 3, column 10
+agent-terminal click 3 10 --session test1
+
+# Right-click for context menu
+agent-terminal click 5 20 --right --session test1
+
+# Double-click to select word
+agent-terminal click 3 10 --double --session test1
 ```
 
-### `drag`
+---
 
-Send a mouse drag from one position to another.
+### `drag <r1> <c1> <r2> <c2>`
+
+Mouse drag from one position to another. Useful for text selection or slider interaction.
+
+**Syntax:**
 
 ```
-agent-terminal drag <r1> <c1> <r2> <c2> [OPTIONS]
+agent-terminal drag <r1> <c1> <r2> <c2> [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
+**Flags:**
 
-Emits a button press at (r1,c1) and release at (r2,c2).
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+**Examples:**
 
 ```bash
-agent-terminal drag 3 1 3 20 --session myapp    # select text on row 3
-agent-terminal drag 5 10 15 10 --session myapp   # drag vertically
+# Select text from row 3 col 1 to row 3 col 20
+agent-terminal drag 3 1 3 20 --session test1
+
+# Drag slider from row 10 col 5 to row 10 col 40
+agent-terminal drag 10 5 10 40 --session test1
 ```
 
-### `scroll-wheel`
+---
 
-Send a scroll wheel event at a position.
+### `scroll-wheel <up|down> <row> <col>`
+
+Send a scroll wheel event at the given position.
+
+**Syntax:**
 
 ```
-agent-terminal scroll-wheel <up|down> <row> <col> [OPTIONS]
+agent-terminal scroll-wheel <direction> <row> <col> [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+**Examples:**
 
 ```bash
-agent-terminal scroll-wheel up 10 40 --session myapp
-agent-terminal scroll-wheel down 10 40 --session myapp
+# Scroll up at center of screen
+agent-terminal scroll-wheel up 12 40 --session test1
+
+# Scroll down in a list area
+agent-terminal scroll-wheel down 15 10 --session test1
 ```
 
 ---
@@ -334,33 +481,56 @@ agent-terminal scroll-wheel down 10 40 --session myapp
 
 ### `wait`
 
-Wait for a condition to be met. Exactly one condition should be specified.
+Wait for a condition before proceeding. Essential for synchronizing with async terminal updates.
+
+**Syntax:**
 
 ```
-agent-terminal wait [<ms>] [OPTIONS]
+agent-terminal wait [<ms>] [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `<ms>` | none | Hard wait in milliseconds (positional argument) |
-| `--text <str>` | none | Wait until text appears on screen |
-| `--text-gone <str>` | none | Wait until text disappears from screen |
-| `--stable <ms>` | none | Wait until screen unchanged for N ms |
-| `--cursor <row,col>` | none | Wait until cursor reaches position |
-| `--regex <pattern>` | none | Wait until regex matches screen content |
-| `--session <name>` | `agent-terminal` | Session name |
-| `--timeout <ms>` | `10000` | Maximum wait time before failing |
-| `--interval <ms>` | `50` | Polling interval |
+**Modes (mutually exclusive):**
 
-On success, prints the final snapshot. On timeout, prints a diagnostic error including the last snapshot, session state, and hints.
+| Flag | Type | Description |
+|------|------|-------------|
+| _(positional)_ | integer | Hard wait for N milliseconds (last resort) |
+| `--text` | string | Poll until text appears on screen |
+| `--text-gone` | string | Poll until text disappears from screen |
+| `--stable` | integer | Poll until screen unchanged for N milliseconds |
+| `--cursor` | string | Poll until cursor reaches `row,col` position |
+| `--regex` | string | Poll until regex pattern matches screen content |
+
+**Common flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--timeout` | integer | `10000` | Maximum wait time in ms before failing |
+| `--interval` | integer | `50` | Poll interval in ms |
+
+**Examples:**
 
 ```bash
-agent-terminal wait --text "Ready" --session myapp
-agent-terminal wait --text-gone "Loading..." --session myapp --timeout 30000
-agent-terminal wait --stable 500 --session myapp
-agent-terminal wait --cursor 5,10 --session myapp
-agent-terminal wait --regex "v\d+\.\d+" --session myapp
-agent-terminal wait 2000    # hard wait, use as last resort
+# Wait for text to appear
+agent-terminal wait --text "Ready" --session test1
+
+# Wait for loading to finish
+agent-terminal wait --text-gone "Loading..." --session test1
+
+# Wait for screen to stabilize (no changes for 500ms)
+agent-terminal wait --stable 500 --session test1
+
+# Wait for cursor position
+agent-terminal wait --cursor 5,1 --session test1
+
+# Wait for regex match
+agent-terminal wait --regex "v[0-9]+\.[0-9]+\.[0-9]+" --session test1
+
+# Custom timeout
+agent-terminal wait --text "Compiled" --timeout 30000 --session test1
+
+# Hard wait (avoid when possible)
+agent-terminal wait 1000 --session test1
 ```
 
 ---
@@ -369,35 +539,51 @@ agent-terminal wait 2000    # hard wait, use as last resort
 
 ### `assert`
 
-Check a condition. Exits 0 on pass, exits 1 with diagnostic output on fail.
+Check a condition and exit 0 (pass) or exit 1 (fail). On failure, prints a diagnostic snapshot.
+
+**Syntax:**
 
 ```
-agent-terminal assert [OPTIONS]
+agent-terminal assert [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--text <str>` | none | Assert text is present on screen |
-| `--no-text <str>` | none | Assert text is absent from screen |
-| `--row <N>` | none | Row number for row-specific assertion |
-| `--row-text <str>` | none | Text to check in the specified row (requires `--row`) |
-| `--cursor-row <N>` | none | Assert cursor is on this row |
-| `--color <N>` | none | Row number for color/style assertion |
-| `--color-style <str>` | none | Style spec to check (requires `--color`). Format: `"fg:red,bold"` |
-| `--style <str>` | none | Find this text and check its style |
-| `--style-check <str>` | none | Expected style for `--style` text. Format: `"fg:red,bold"` |
-| `--session <name>` | `agent-terminal` | Session name |
+**Assertion modes:**
 
-Style spec format: comma-separated list of `fg:<color>`, `bg:<color>`, `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`.
+| Flag | Type | Description |
+|------|------|-------------|
+| `--text` | string | Assert text is present on screen |
+| `--no-text` | string | Assert text is absent from screen |
+| `--row` + `--row-text` | int + string | Assert specific row contains text |
+| `--cursor-row` | integer | Assert cursor is on the given row |
+| `--color` + `--color-style` | int + string | Assert row N has the given style |
+| `--style` + `--style-check` | string + string | Assert specific text has a style |
+
+**Common flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+**Examples:**
 
 ```bash
-agent-terminal assert --text "Welcome" --session myapp
-agent-terminal assert --no-text "Error" --session myapp
-agent-terminal assert --row 1 --row-text "File  Edit" --session myapp
-agent-terminal assert --cursor-row 3 --session myapp
-agent-terminal assert --color 5 --color-style "fg:red" --session myapp
-agent-terminal assert --color 3 --color-style "fg:green,bold,reverse" --session myapp
-agent-terminal assert --style "Error" --style-check "fg:red" --session myapp
+# Check text is present
+agent-terminal assert --text "Welcome" --session test1
+
+# Check text is absent
+agent-terminal assert --no-text "Error" --session test1
+
+# Check specific row content
+agent-terminal assert --row 1 --row-text "Title Bar" --session test1
+
+# Check cursor position
+agent-terminal assert --cursor-row 3 --session test1
+
+# Check color on a row
+agent-terminal assert --color 5 --color-style "fg:red,bold" --session test1
+
+# Check style of specific text
+agent-terminal assert --style "Error" --style-check "fg:red" --session test1
 ```
 
 ---
@@ -406,105 +592,161 @@ agent-terminal assert --style "Error" --style-check "fg:red" --session myapp
 
 ### `status`
 
-Get process status information.
+Check whether the process is alive, dead, or crashed.
+
+**Syntax:**
 
 ```
-agent-terminal status [OPTIONS]
+agent-terminal status [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--pane <name>` | none | Target pane |
-| `--json` | off | Output as JSON |
+**Flags:**
 
-JSON output: `{"alive": bool, "pid": int, "exit_code": int|null, "signal": null, "runtime_ms": int}`
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--pane` | string | _(none)_ | Target pane |
+| `--json` | bool | `false` | Output as JSON |
+
+**Examples:**
 
 ```bash
-agent-terminal status --session myapp
-agent-terminal status --session myapp --json
+# Human-readable
+agent-terminal status --session test1
+# Output: alive (pid 12345)
+
+# JSON for scripting
+agent-terminal status --json --session test1
+# Output: {"alive": true, "pid": 12345, "command": "./my-app"}
 ```
+
+---
 
 ### `exit-code`
 
-Get the exit code of the terminated process.
+Get the exit code of a terminated process. Only valid after the process has exited.
+
+**Syntax:**
 
 ```
-agent-terminal exit-code [OPTIONS]
+agent-terminal exit-code [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
+**Flags:**
 
-Prints the exit code if available, "Process still running" if alive, or an error with diagnostic info.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+**Examples:**
 
 ```bash
-agent-terminal exit-code --session myapp
+agent-terminal exit-code --session test1
+# Output: 0
 ```
+
+---
 
 ### `logs`
 
-Read captured stderr and stdout scrollback.
+Read captured stdout/stderr from the process.
+
+**Syntax:**
 
 ```
-agent-terminal logs [OPTIONS]
+agent-terminal logs [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--stderr` | off | Show stderr only (skip stdout scrollback) |
+**Flags:**
 
-Without `--stderr`, shows both stderr and stdout (tmux scrollback) sections.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--stderr` | bool | `false` | Show only stderr output |
+
+**Examples:**
 
 ```bash
-agent-terminal logs --session myapp
-agent-terminal logs --stderr --session myapp
+# Read all logs
+agent-terminal logs --session test1
+
+# Read only stderr (useful for crash diagnostics)
+agent-terminal logs --stderr --session test1
 ```
 
-### `signal`
+---
 
-Send a Unix signal to the process running in the pane.
+### `signal <SIGNAL>`
+
+Send a Unix signal to the running process.
+
+**Syntax:**
 
 ```
-agent-terminal signal <SIGNAL> [OPTIONS]
+agent-terminal signal <SIGNAL> [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
+**Flags:**
 
-Accepts signal names with or without `SIG` prefix, case-insensitive. Supported: SIGINT, SIGTERM, SIGWINCH, SIGTSTP, SIGCONT, SIGHUP, SIGKILL, SIGUSR1, SIGUSR2.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+**Common signals:** `SIGINT`, `SIGTERM`, `SIGKILL`, `SIGWINCH`, `SIGSTOP`, `SIGCONT`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`.
+
+**Examples:**
 
 ```bash
-agent-terminal signal SIGINT --session myapp
-agent-terminal signal TERM --session myapp
-agent-terminal signal SIGWINCH --session myapp
-agent-terminal signal SIGTSTP --session myapp    # suspend
-agent-terminal signal SIGCONT --session myapp    # resume
+# Graceful termination
+agent-terminal signal SIGTERM --session test1
+
+# Force kill
+agent-terminal signal SIGKILL --session test1
+
+# Trigger resize handler
+agent-terminal signal SIGWINCH --session test1
+
+# Test interrupt handling
+agent-terminal signal SIGINT --session test1
 ```
 
 ---
 
 ## Clipboard
 
-### `clipboard`
+### `clipboard <operation> [text]`
 
-Clipboard operations via tmux paste buffer.
+Interact with the tmux paste buffer (clipboard).
+
+**Syntax:**
 
 ```
-agent-terminal clipboard <read|write|paste> [text] [OPTIONS]
+agent-terminal clipboard <read|write|paste> [text] [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
+**Operations:**
+
+| Operation | Description |
+|-----------|-------------|
+| `read` | Read the current tmux paste buffer content |
+| `write` | Write text to the tmux paste buffer |
+| `paste` | Paste from the buffer into the active pane |
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+**Examples:**
 
 ```bash
-agent-terminal clipboard read --session myapp           # read paste buffer
-agent-terminal clipboard write "copied text" --session myapp  # set paste buffer
-agent-terminal clipboard paste --session myapp          # paste buffer into pane
+# Write to clipboard, then paste
+agent-terminal clipboard write "some text" --session test1
+agent-terminal clipboard paste --session test1
+
+# Read clipboard contents
+agent-terminal clipboard read --session test1
 ```
 
 ---
@@ -513,101 +755,115 @@ agent-terminal clipboard paste --session myapp          # paste buffer into pane
 
 ### `perf start`
 
-Start background frame recording.
+Begin background frame recording. Frames are sampled until `perf stop` is called.
+
+**Syntax:**
 
 ```
-agent-terminal perf start [OPTIONS]
+agent-terminal perf start [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
+**Flags:**
 
-Spawns a background poller that records frame changes every ~10ms. Use `perf stop` to retrieve metrics.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+
+---
 
 ### `perf stop`
 
-Stop frame recording and return metrics.
+Stop frame recording and return performance metrics.
+
+**Syntax:**
 
 ```
-agent-terminal perf stop [OPTIONS]
+agent-terminal perf stop [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--json` | off | Output as JSON |
+**Flags:**
 
-Human-readable output includes FPS, frame count, frame time stats, and a rating.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--json` | bool | `false` | Output as JSON |
 
-JSON output:
-```json
-{
-  "fps": 24.5,
-  "frame_count": 73,
-  "duration_ms": 2980,
-  "min_frame_ms": 33,
-  "max_frame_ms": 120,
-  "mean_frame_ms": 40.0,
-  "p95_frame_ms": 88,
-  "idle_ms": 450,
-  "timeline": [{"t_ms": 0, "frame_ms": 33}, ...]
-}
+**Example:**
+
+```bash
+agent-terminal perf start --session test1
+# ... perform actions ...
+agent-terminal perf stop --json --session test1
+# {"fps": 24.5, "frame_count": 12, "p95_frame_ms": 88, ...}
 ```
+
+---
 
 ### `perf fps`
 
-Measure FPS inline (single command).
+Measure frames per second using various methods.
+
+**Syntax:**
 
 ```
-agent-terminal perf fps [OPTIONS]
+agent-terminal perf fps [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--during <cmds>` | none | Agent-terminal commands to run while measuring (joined with `&&`) |
-| `--during-batch` | off | Read JSON batch of commands from stdin |
-| `--duration <ms>` | none | Passively observe for N milliseconds |
+**Flags:**
 
-Exactly one of `--during`, `--during-batch`, or `--duration` is required. Always outputs JSON.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--during` | string | _(none)_ | Measure FPS while running a command string |
+| `--during-batch` | bool | `false` | Read batch commands from stdin while measuring |
+| `--duration` | integer | _(none)_ | Passively observe FPS for N milliseconds |
+
+**Examples:**
 
 ```bash
-agent-terminal perf fps --duration 3000 --session myapp
-agent-terminal perf fps --during 'send "j" && send "k"' --session myapp
-echo '[{"cmd":"send","args":["j"]},{"cmd":"wait","args":["--stable","100"]}]' | agent-terminal perf fps --during-batch --session myapp
+# Passive observation for 3 seconds
+agent-terminal perf fps --duration 3000 --session test1
+
+# Measure during actions
+agent-terminal perf fps --during 'send "j" && send "k"' --session test1
 ```
+
+---
 
 ### `perf latency`
 
-Measure input latency (keystroke to screen update).
+Measure keystroke-to-render input latency.
+
+**Syntax:**
 
 ```
-agent-terminal perf latency [OPTIONS]
+agent-terminal perf latency [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <name>` | `agent-terminal` | Session name |
-| `--key <key>` | `space` | Key to test |
-| `--samples <N>` | `5` | Number of measurements |
-| `--json` | off | Output as JSON |
+**Flags:**
 
-Sends the key, polls for screen change at 1ms intervals, reports statistics. Default key is space (cancelled with backspace).
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Target session |
+| `--key` | string | _(auto)_ | Key to test |
+| `--samples` | integer | `5` | Number of measurement samples |
+| `--json` | bool | `false` | Output as JSON |
 
-JSON output:
-```json
-{
-  "mean_ms": 18.0,
-  "min_ms": 8,
-  "max_ms": 45,
-  "p95_ms": 38,
-  "samples": 10,
-  "measurements": [8, 12, 15, 18, 20, 22, 25, 30, 38, 45]
-}
+**Example:**
+
+```bash
+agent-terminal perf latency --key "j" --samples 10 --json --session test1
+# {"mean_ms": 18, "p95_ms": 38, "min_ms": 12, "max_ms": 45}
 ```
 
-Latency ratings: <16ms excellent, 16-50ms good, 50-100ms fair, 100-200ms poor, >200ms bad.
+**Interpreting results:**
+
+| Latency | Rating |
+|---------|--------|
+| < 16ms | Excellent |
+| 16-50ms | Good |
+| 50-100ms | Noticeable |
+| > 100ms | Sluggish |
 
 ---
 
@@ -615,71 +871,102 @@ Latency ratings: <16ms excellent, 16-50ms good, 50-100ms fair, 100-200ms poor, >
 
 ### `doctor`
 
-Validate the environment for agent-terminal compatibility.
+Validate the environment: check tmux version, capabilities, and dependencies.
+
+**Syntax:**
 
 ```
 agent-terminal doctor
 ```
 
-Checks: tmux version (>= 3.0), session creation, capture-pane, ANSI capture, mouse support, resize, send-keys, paste-buffer. Each failure includes a fix suggestion.
+**Flags:** None.
+
+**Example:**
+
+```bash
+agent-terminal doctor
+# tmux 3.4 ... OK
+# capture-pane -e ... OK
+# /tmp writable ... OK
+# All checks passed
+```
+
+---
 
 ### `init`
 
-Detect the TUI framework in the current directory and generate a starter test.
+Detect the project framework and generate a starter test file.
+
+**Syntax:**
 
 ```
 agent-terminal init
 ```
 
-Detects frameworks from: `Cargo.toml` (ratatui, crossterm, cursive), `go.mod` (bubbletea, tview, termui), `package.json` (ink, blessed, terminal-kit), `requirements.txt`/`pyproject.toml` (textual, rich, curses).
+**Flags:** None.
 
-Creates `tests/tui/basic_test.sh` with appropriate run command and wait times.
+**Example:**
+
+```bash
+agent-terminal init
+# Detected: ratatui (Rust)
+# Created: tests/tui-test.sh
+```
+
+---
 
 ### `test-matrix`
 
-Run tests across multiple terminal configurations.
+Run tests across multiple terminal configurations (sizes, TERM values, color modes).
+
+**Syntax:**
 
 ```
-agent-terminal test-matrix [OPTIONS]
+agent-terminal test-matrix [flags]
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--command <cmd>` | required | Command to test |
-| `--test <cmds>` | required | Semicolon-separated test commands to run. Use `{session}` as placeholder |
-| `--sizes <list>` | `80x24,120x40,40x10` | Comma-separated terminal sizes |
-| `--terms <list>` | `xterm-256color,dumb` | Comma-separated TERM values |
-| `--colors <list>` | `default,NO_COLOR=1` | Comma-separated color modes (env var settings) |
+**Flags:**
 
-Runs every combination, reports pass/fail, saves failure snapshots to `./agent-terminal-matrix/`.
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--command` | string | _(required)_ | Command to launch for each combination |
+| `--sizes` | string | `"80x24"` | Comma-separated terminal sizes (e.g., `"80x24,120x40,40x10"`) |
+| `--terms` | string | `"xterm-256color"` | Comma-separated TERM values (e.g., `"xterm-256color,dumb"`) |
+| `--colors` | string | `"default"` | Comma-separated color modes (e.g., `"default,NO_COLOR=1"`) |
+| `--test` | string | _(required)_ | Test commands to run. Use `{session}` as placeholder. |
+
+**Example:**
 
 ```bash
 agent-terminal test-matrix \
   --command "./my-app" \
-  --sizes "80x24,40x10" \
+  --sizes "80x24,120x40,40x10" \
   --terms "xterm-256color,dumb" \
   --colors "default,NO_COLOR=1" \
-  --test "agent-terminal assert --text 'Ready' --session {session}"
+  --test "agent-terminal assert --text 'Welcome' --session {session}"
+# Runs 12 combinations (3 sizes x 2 terms x 2 colors)
 ```
 
-### `a11y-check`
+---
 
-Run accessibility checks against a TUI application.
+### `a11y-check <command>`
+
+Run an accessibility audit against the given command. Tests NO_COLOR support, TERM=dumb behavior, and resize handling.
+
+**Syntax:**
 
 ```
 agent-terminal a11y-check "<command>"
 ```
 
-Runs 5 checks:
-1. **NO_COLOR respected** -- no ANSI color codes with `NO_COLOR=1`
-2. **TERM=dumb fallback** -- app doesn't crash with `TERM=dumb`
-3. **Resize handling** -- app survives resize to 40x10
-4. **Focus visible** -- skipped (manual verification recommended)
-5. **Contrast** -- warns if dim/faint text detected
+**Flags:** None (command is positional).
 
-Saves failure details to `./a11y-report/`.
+**Example:**
 
 ```bash
 agent-terminal a11y-check "./my-app"
-agent-terminal a11y-check "cargo run"
+# Checking NO_COLOR support ... PASS
+# Checking TERM=dumb fallback ... PASS
+# Checking resize to 40x10 ... PASS
+# Accessibility: 3/3 passed
 ```
