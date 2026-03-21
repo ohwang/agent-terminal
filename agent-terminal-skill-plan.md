@@ -1340,3 +1340,57 @@ Every subcommand in the status table above should have at least one integration 
 - ~~vhs integration~~ → No. Extra dependency, less control over timing. tmux is sufficient.
 - ~~pty-level vs tmux~~ → tmux. Session persistence and multiplexing for free. Worth the indirection.
 - ~~Windows~~ → Out of scope. tmux doesn't run on Windows. WSL users get the Linux binary.
+
+---
+
+## 9. Real-World Testing Findings (2026-03-21)
+
+20 scenarios tested against real tools (nvim, bash, python3, node, less, man, git log, htop, grep), plus 2 bonus scenarios (snapshot --diff, wait --regex/--stable). All 22 pass. 165 total tests across 28 suites.
+
+### Issues Found & Fixed
+
+| Issue | Severity | Fix |
+|---|---|---|
+| Fast-exiting commands (grep, less) kill session before snapshot | High | Added `--shell` flag to `open` — wraps command with `exec $SHELL` to keep session alive |
+| stderr redirect (`2>file`) hides bash prompts and breaks readline/tab completion | Critical | Added `--no-stderr` flag to `open` — skips stderr capture for shell-based apps |
+| No way to wait for process exit without sleep | Medium | Added `wait --exit` — polls `#{pane_dead}` until process terminates |
+
+### Issues Documented (Not Bugs — Design Constraints)
+
+| Issue | Context | Workaround |
+|---|---|---|
+| nvim custom configs (LazyVim) change expected output | User configs affect test output | Use `nvim --clean` for reproducible tests |
+| Pagers (less, man) exit kills direct session | tmux destroys pane when the only process exits | Open bash first, then type pager command inside |
+| `bash --norc --noprofile` has invisible prompt even with --no-stderr on macOS | macOS bash default PS1 doesn't render in some tmux configs | Explicitly `export PS1='$ '` or use `--env PS1='$ '` |
+| Trailing blank lines stripped from snapshot | tmux capture-pane trims trailing empty lines | Not a bug — document that snapshot height may be less than terminal rows |
+| `scrollback --lines N` returns N + visible lines | N means "lines above viewport", not total | Document the semantics |
+| `wait` returns raw text, `snapshot` includes header | Different output formats for different purposes | Use `snapshot` when you need metadata, `wait` for quick checks |
+| CJK characters occupy 2 columns but report 1 character | No unicode-width handling in snapshot parser | Add `unicode-width` crate if column-accurate alignment is needed |
+
+### Performance Observations
+
+| Metric | Value | Notes |
+|---|---|---|
+| Key send throughput | ~220 keys/sec (4.5ms/key) | Process spawn overhead per command; zero drops at 50 keys |
+| `wait --stable 500` latency | ~568ms | 500ms stability window + polling overhead |
+| Scrollback capture (100 lines) | <100ms | Efficient tmux capture-pane |
+| Full test suite (165 tests) | ~70s | At default test-threads |
+
+### Patterns Discovered for Real-World Testing
+
+1. **Testing pager apps (less, man, git log)**: Open bash first, then type the pager command. This keeps the session alive after the pager exits.
+2. **Testing bash/readline apps**: Use `--no-stderr` flag. Without it, prompts are invisible and tab completion breaks.
+3. **Testing nvim**: Always use `--clean` flag to avoid user config interference.
+4. **Testing fast-exiting commands**: Use `--shell` flag to keep session alive for post-exit inspection.
+5. **Waiting for process exit**: Use `wait --exit` instead of `sleep` — it's faster and more reliable.
+6. **Interactive shells need explicit PS1**: Set `--env PS1='$ '` for predictable prompt detection.
+
+### Suggestions for Future Improvements
+
+| Priority | Suggestion | Rationale |
+|---|---|---|
+| High | `open --wait-for "text"` flag | Combines open + wait in one command; reduces boilerplate |
+| Medium | `wait --text --line N` | Restrict text match to specific line number for precise assertions |
+| Medium | `--diff --reset` flag | Explicitly clear diff baseline |
+| Low | `unicode-width` crate for CJK alignment | Currently CJK chars report correct text but wrong column alignment |
+| Low | Document stderr redirect behavior in SKILL.md | Many users will test shell apps and hit this |
