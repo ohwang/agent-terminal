@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            artifact-name: agent-terminal-darwin-x64
+            use-cross: false
+
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            artifact-name: agent-terminal-darwin-arm64
+            use-cross: false
+
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            artifact-name: agent-terminal-linux-x64
+            use-cross: false
+
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            artifact-name: agent-terminal-linux-arm64
+            use-cross: true
+
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            artifact-name: agent-terminal-linux-musl-x64
+            use-cross: false
+
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            artifact-name: agent-terminal-linux-musl-arm64
+            use-cross: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl-tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install cross
+        if: matrix.use-cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build with cargo
+        if: "!matrix.use-cross"
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build with cross
+        if: matrix.use-cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: |
+          cp target/${{ matrix.target }}/release/agent-terminal ${{ matrix.artifact-name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          for dir in artifacts/*/; do
+            cp "$dir"* release-assets/
+          done
+          chmod +x release-assets/*
+          ls -la release-assets/
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | head -n 2 | tail -n 1)
+          CURRENT_TAG=${GITHUB_REF_NAME}
+
+          if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" = "$CURRENT_TAG" ]; then
+            # First release — include all commits
+            NOTES=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            NOTES=$(git log --pretty=format:"- %s (%h)" "${PREVIOUS_TAG}..${CURRENT_TAG}")
+          fi
+
+          # Write to file to handle multiline properly
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "$NOTES"
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG:-initial}...${CURRENT_TAG}"
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
