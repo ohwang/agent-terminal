@@ -162,6 +162,8 @@ pub fn open(
     pane: Option<&str>,
     envs: &[String],
     size: Option<&str>,
+    shell: bool,
+    no_stderr: bool,
 ) -> Result<(), String> {
     // Build the env export prefix.
     let mut env_prefix = String::new();
@@ -174,12 +176,29 @@ pub fn open(
         env_prefix.push_str(&format!("export {env_spec}; "));
     }
 
-    // Wrap the command to capture stderr and exit code.
+    // Build the wrapped command.
     let stderr_file = stderr_path(session);
     let exit_file = exit_code_path(session);
-    let wrapped = format!(
-        "{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}"
-    );
+
+    let wrapped = if no_stderr {
+        // No stderr capture — needed for bash/readline apps where prompts
+        // and tab completion go through stderr.
+        if shell {
+            format!("{env_prefix}{command}; exec $SHELL")
+        } else {
+            format!("{env_prefix}{command}")
+        }
+    } else if shell {
+        // Capture stderr but keep session alive after command exits.
+        format!(
+            "{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}; exec $SHELL"
+        )
+    } else {
+        // Default: capture stderr and exit code.
+        format!(
+            "{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}"
+        )
+    };
 
     if let Some(pane_name) = pane {
         // Split an existing session to add a new pane.
@@ -837,7 +856,7 @@ pub fn test_matrix(
         }
 
         // Open session.
-        let open_result = open(command, &session_name, None, &envs, Some(entry.size));
+        let open_result = open(command, &session_name, None, &envs, Some(entry.size), false, false);
         if let Err(e) = open_result {
             results.push(MatrixResult {
                 label: label.clone(),
@@ -1006,7 +1025,7 @@ pub fn a11y_check(command: &str) -> Result<(), String> {
             let _ = close(session);
         }
 
-        open(command, session, None, envs, Some(size))?;
+        open(command, session, None, envs, Some(size), false, false)?;
         thread::sleep(Duration::from_millis(1000));
 
         let alive = get_pane_pid(session, None)

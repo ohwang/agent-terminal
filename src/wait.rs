@@ -349,6 +349,7 @@ pub fn wait(
     stable: Option<u64>,
     cursor: Option<&str>,
     regex: Option<&str>,
+    exit: bool,
     session: &str,
     timeout: u64,
     interval: u64,
@@ -477,7 +478,45 @@ pub fn wait(
         });
     }
 
-    Err("No wait condition specified. Use one of: <ms>, --text, --text-gone, --stable, --cursor, --regex".to_string())
+    // 7. Wait for process exit
+    if exit {
+        let deadline = Instant::now() + Duration::from_millis(timeout);
+
+        loop {
+            // Check if the pane's process is still alive by querying tmux.
+            let alive = tmux_cmd(&[
+                "display-message", "-t", session, "-p", "#{pane_dead}",
+            ]);
+
+            match alive {
+                Ok(output) => {
+                    let trimmed = output.trim();
+                    // #{pane_dead} returns "1" when the process has exited.
+                    if trimmed == "1" {
+                        println!("Process exited");
+                        return Ok(());
+                    }
+                }
+                Err(_) => {
+                    // Session no longer exists — process exited and tmux cleaned up.
+                    println!("Process exited (session gone)");
+                    return Ok(());
+                }
+            }
+
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "wait --exit timed out after {}ms — process is still running\n\nSession: {}",
+                    timeout,
+                    session_diagnostics(session),
+                ));
+            }
+
+            thread::sleep(Duration::from_millis(interval));
+        }
+    }
+
+    Err("No wait condition specified. Use one of: <ms>, --text, --text-gone, --stable, --cursor, --regex, --exit".to_string())
 }
 
 /// Generic poll loop for wait conditions that check snapshot content.

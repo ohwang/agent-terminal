@@ -32,6 +32,12 @@ enum Commands {
         /// Initial terminal size (COLSxROWS)
         #[arg(long)]
         size: Option<String>,
+        /// Keep session alive after command exits (wraps in shell)
+        #[arg(long)]
+        shell: bool,
+        /// Don't capture stderr (needed for bash/readline apps)
+        #[arg(long)]
+        no_stderr: bool,
     },
     /// Kill a tmux session
     Close {
@@ -203,6 +209,9 @@ enum Commands {
         /// Wait for regex match
         #[arg(long)]
         regex: Option<String>,
+        /// Wait until process exits
+        #[arg(long)]
+        exit: bool,
         /// Session name
         #[arg(long, default_value = "agent-terminal")]
         session: String,
@@ -398,8 +407,8 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::Open { command, session, pane, envs, size } => {
-            session::open(&command, &session, pane.as_deref(), &envs, size.as_deref())
+        Commands::Open { command, session, pane, envs, size, shell, no_stderr } => {
+            session::open(&command, &session, pane.as_deref(), &envs, size.as_deref(), shell, no_stderr)
         }
         Commands::Close { session } => {
             session::close(&session)
@@ -440,8 +449,8 @@ fn main() {
         Commands::ScrollWheel { direction, row, col, session } => {
             interact::scroll_wheel(&direction, row, col, &session)
         }
-        Commands::Wait { ms, text, text_gone, stable, cursor, regex, session, timeout, interval } => {
-            wait::wait(ms, text.as_deref(), text_gone.as_deref(), stable, cursor.as_deref(), regex.as_deref(), &session, timeout, interval)
+        Commands::Wait { ms, text, text_gone, stable, cursor, regex, exit, session, timeout, interval } => {
+            wait::wait(ms, text.as_deref(), text_gone.as_deref(), stable, cursor.as_deref(), regex.as_deref(), exit, &session, timeout, interval)
         }
         Commands::Assert { text, no_text, row, row_text, cursor_row, color, color_style, style, style_check, session } => {
             wait::assert_cmd(text.as_deref(), no_text.as_deref(), row, row_text.as_deref(), cursor_row, color, color_style.as_deref(), style.as_deref(), style_check.as_deref(), &session)
