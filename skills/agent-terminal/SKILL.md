@@ -84,7 +84,7 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS]` | Launch command in a new tmux session |
+| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS] [--shell] [--no-stderr]` | Launch command in a new tmux session |
 | `close [--session s]` | Kill the session and clean up temp files |
 | `list` | List all active tmux sessions |
 
@@ -119,6 +119,7 @@ All commands default to `--session agent-terminal` if not specified.
 | `wait --stable <ms>` | Poll until screen unchanged for N ms |
 | `wait --cursor <row,col>` | Poll until cursor reaches position |
 | `wait --regex "pattern"` | Poll until regex matches screen content |
+| `wait --exit` | Poll until the process exits |
 
 Default timeout: 10000ms. Default poll interval: 50ms.
 

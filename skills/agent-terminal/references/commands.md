@@ -26,6 +26,8 @@ agent-terminal open "<command>" [flags]
 | `--pane` | string | _(none)_ | Named pane within the session |
 | `--env` | string | _(none)_ | Environment variable in `KEY=VAL` format. Repeatable. |
 | `--size` | string | _(none)_ | Initial terminal dimensions as `COLSxROWS` |
+| `--shell` | bool | `false` | Keep session alive after command exits. Wraps the command so a shell takes over when it finishes. |
+| `--no-stderr` | bool | `false` | Don't capture stderr. Needed for bash/readline apps where PS1 prompts go through stderr. |
 
 **Examples:**
 
@@ -41,6 +43,12 @@ agent-terminal open "./my-app" --session test1 --env NO_COLOR=1 --env TERM=dumb
 
 # Named pane for multi-pane setups
 agent-terminal open "./server" --session multi --pane server
+
+# Keep session alive after a fast-exiting command (e.g., grep, curl)
+agent-terminal open "grep -r 'TODO' src/" --session grep1 --shell
+
+# Test bash with visible prompts (readline sends PS1 via stderr)
+agent-terminal open "bash" --session bash1 --no-stderr --env PS1='$ '
 ```
 
 ---
@@ -499,6 +507,7 @@ agent-terminal wait [<ms>] [flags]
 | `--stable` | integer | Poll until screen unchanged for N milliseconds |
 | `--cursor` | string | Poll until cursor reaches `row,col` position |
 | `--regex` | string | Poll until regex pattern matches screen content |
+| `--exit` | bool | Poll until the process exits (checks tmux `#{pane_dead}`) |
 
 **Common flags:**
 
@@ -528,6 +537,9 @@ agent-terminal wait --regex "v[0-9]+\.[0-9]+\.[0-9]+" --session test1
 
 # Custom timeout
 agent-terminal wait --text "Compiled" --timeout 30000 --session test1
+
+# Wait for process to exit (more reliable than sleep)
+agent-terminal wait --exit --session test1
 
 # Hard wait (avoid when possible)
 agent-terminal wait 1000 --session test1

@@ -533,6 +533,125 @@ echo "PASS: multi-pane client/server"
 
 ---
 
+## 13. Testing Pager Apps (less, man)
+
+Pagers exit and kill the tmux session when they quit. Use a shell wrapper to keep the session alive.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# Open bash first, then run the pager inside it
+agent-terminal open "bash" --session "$SESSION" --no-stderr --env PS1='$ '
+agent-terminal wait --text "$ " --session "$SESSION"
+
+# Launch the pager from inside bash
+agent-terminal type "less /etc/hosts" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+agent-terminal snapshot --session "$SESSION"
+
+# Quit the pager -- session stays alive because bash is still running
+agent-terminal send "q" --session "$SESSION"
+agent-terminal wait --text "$ " --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: pager testing"
+```
+
+---
+
+## 14. Testing Bash / Readline Apps
+
+Use `--no-stderr` so that PS1 prompts and tab completion output (which go through stderr) remain visible in snapshots.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# --no-stderr keeps prompts visible; --env PS1 makes them predictable
+agent-terminal open "bash" --session "$SESSION" --no-stderr --env PS1='$ '
+agent-terminal wait --text "$ " --session "$SESSION"
+
+# Run a command and verify output
+agent-terminal type "echo hello" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --stable 300 --session "$SESSION"
+agent-terminal assert --text "hello" --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: bash/readline testing"
+```
+
+---
+
+## 15. Testing Fast-Exiting Commands
+
+Use `--shell` to keep the session alive after the command exits, so you can inspect its output.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# --shell keeps the session alive after grep exits
+agent-terminal open "grep -r 'TODO' src/" --session "$SESSION" --shell
+agent-terminal wait --exit --session "$SESSION" --timeout 10000
+agent-terminal snapshot --session "$SESSION"
+
+# Output is still visible even though grep has finished
+agent-terminal assert --text "TODO" --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: fast-exiting command"
+```
+
+---
+
+## 16. Testing nvim
+
+Use `nvim --clean` to avoid user config interference.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+agent-terminal open "nvim --clean" --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+
+# Enter insert mode and type
+agent-terminal send "i" --session "$SESSION"
+agent-terminal wait --stable 200 --session "$SESSION"
+agent-terminal type "Hello from nvim" --session "$SESSION"
+agent-terminal wait --stable 200 --session "$SESSION"
+agent-terminal assert --text "Hello from nvim" --session "$SESSION"
+
+# Exit without saving
+agent-terminal send Escape --session "$SESSION"
+agent-terminal type ":q!" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: nvim testing"
+```
+
+---
+
 ## General Principles
 
 These principles apply across all patterns:
@@ -548,3 +667,11 @@ These principles apply across all patterns:
 5. **Check process health when things go wrong.** If a snapshot shows unexpected content, run `status --json` and `logs --stderr` before debugging further.
 
 6. **Start with `--stable` after `open`.** The first render may take time, especially for apps that compile or load data.
+
+7. **Use `--env PS1='$ '` for interactive shells.** A simple, predictable prompt makes `wait --text "$ "` reliable. Default PS1 values vary across systems and include escape sequences that complicate matching.
+
+8. **Use `--shell` for commands that exit immediately.** Fast-exiting commands (grep, curl, ls) finish before you can inspect output. `--shell` wraps the command so a shell takes over afterward.
+
+9. **Use `--no-stderr` for bash/readline apps.** Bash sends PS1 prompts and tab completion through stderr. Without `--no-stderr`, prompts are invisible in snapshots.
+
+10. **Use `--exit` instead of `sleep` to wait for process completion.** `wait --exit` polls tmux `#{pane_dead}` and is more reliable than guessing how long a command takes.
