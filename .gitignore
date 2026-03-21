@@ -7,3 +7,10 @@
 /agent-terminal-matrix/
 /a11y-report/
 /tmp/
+
+# npm
+node_modules/
+package-lock.json
+
+# Platform binaries (downloaded at install time, not checked in)
+bin/agent-terminal-*
