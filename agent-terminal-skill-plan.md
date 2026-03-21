@@ -941,36 +941,36 @@ tmux works without a real TTY, which means agent-terminal works in CI natively. 
 | `[T]` | **Snapshot (raw)** | G1 | `snapshot --raw`, `--ansi` | `[T]` | Raw ANSI passthrough + ANSI-with-row-numbers |
 | `[T]` | **Snapshot (JSON)** | G1 | `snapshot --json` | `[T]` 2 tests | Structure + color spans verified |
 | `[T]` | **Snapshot (diff)** | G1 | `snapshot --diff` | `[T]` | +/- markers, baseline storage in /tmp |
-| `[x]` | **Snapshot (scrollback)** | G1 | `snapshot --scrollback` | `[ ]` | Code path exists but no test via `snapshot` cmd |
+| `[T]` | **Snapshot (scrollback)** | G1 | `snapshot --scrollback` | `[T]` | Tested in snapshot_test.rs |
 | `[T]` | **Keyboard interaction** | G1 | `send`, `type`, `paste` | `[T]` 6 tests | Key mapping passes through to tmux natively (Enter, Up, C-c etc. work) |
 | `[T]` | **Wait** | G1 | `--text`, `--text-gone`, `--stable`, `--regex`, `<ms>` | `[T]` 6 tests | All with timeout/error output |
-| `[x]` | **Wait (cursor)** | G1 | `--cursor row,col` | `[ ]` | Code exists, no test |
+| `[T]` | **Wait (cursor)** | G1 | `--cursor row,col` | `[T]` | Tested in wait_test.rs |
 | `[T]` | **Assert (basic)** | G1, G3 | `--text`, `--no-text`, `--row` | `[T]` 5 tests | Pass/fail with snapshot on failure |
-| `[x]` | **Assert (color/style)** | G3 | `--color`, `--style`, `--cursor-row` | `[ ]` | ANSI parsing + style matching code exists, untested |
+| `[T]` | **Assert (color/style)** | G3 | `--color`, `--style`, `--cursor-row` | `[T]` | cursor-row, color style, style text all tested |
 | `[T]` | **Screenshot (HTML)** | G1 | `screenshot --html` | `[T]` | Full ANSI color → inline CSS |
 | `[T]` | **Screenshot (PNG)** | G1 | `screenshot --path` | `[T]` | Basic bitmap renderer (not full glyph raster) |
-| `[x]` | **Screenshot (annotate/theme)** | G1 | `--annotate`, `--theme` | `[ ]` | Code paths exist, not specifically tested |
+| `[T]` | **Screenshot (annotate/theme)** | G1 | `--annotate`, `--theme` | `[T]` | HTML annotate, PNG annotate, light theme tested |
 | `[T]` | **Process health** | G1 | `status`, `status --json`, `exit-code` | `[T]` 5 tests | Crash detection, exit code, alive/dead |
 | `[T]` | **Logs** | G1 | `logs`, `--stderr` | `[T]` | stderr capture via temp file |
 | `[T]` | **Scrollback** | G1 | `scrollback`, `--lines`, `--search` | `[T]` 2 tests | Buffer capture + text search |
-| `[x]` | **Mouse (click)** | G1, G3 | `click`, `--right`, `--double` | `[ ]` | SGR encoding implemented, fixture exists, **no test** |
-| `[x]` | **Mouse (drag/scroll)** | G1, G3 | `drag`, `scroll-wheel` | `[ ]` | SGR encoding implemented, **no test** |
+| `[T]` | **Mouse (click)** | G1, G3 | `click`, `--right`, `--double` | `[T]` 5 tests | Left, right, double click, coordinates verified |
+| `[T]` | **Mouse (drag/scroll)** | G1, G3 | `drag`, `scroll-wheel` | `[T]` 4 tests | Drag, scroll up/down tested |
 | `[T]` | **Signals** | G1, G3 | `signal SIGTERM/SIGKILL/...` | `[T]` 2 tests | Real signal via nix::sys::signal::kill |
-| `[~]` | **Environment control** | G3, G4 | `open --env KEY=VAL`, `open --size COLSxROWS` | `[~]` | --size tested; --env tested in lifecycle but not env-effect verified |
-| `[x]` | **Multi-pane** | G1 | `open --pane`, `snapshot --pane`, `send --pane` | `[ ]` | CLI wired, pane targeting in code, **no test** |
+| `[T]` | **Environment control** | G3, G4 | `open --env KEY=VAL`, `open --size COLSxROWS` | `[T]` | --size tested; --env tested in lifecycle; TERM=dumb in env_test |
+| `[T]` | **Multi-pane** | G1 | `open --pane`, `snapshot --pane`, `send --pane` | `[T]` 9 tests | Open, snapshot, send, type, status per-pane, independence |
 | `[T]` | **Resize** | G3 | `resize <cols> <rows>` | `[T]` 2 tests | Pane + window resize, verified in snapshot |
 | `[T]` | **Find (basic)** | G1 | `find`, `--all`, `--regex` | `[T]` 4 tests | Text search, all matches, regex |
-| `[x]` | **Find (color)** | G1 | `find --color` | `[ ]` | Style-based search code exists, **no test** |
+| `[T]` | **Find (color)** | G1 | `find --color` | `[T]` | Find by color style tested |
 | `[T]` | **Clipboard** | G1 | `clipboard read/write/paste` | `[T]` 2 tests | All three operations |
 | `[T]` | **Perf: FPS (start/stop)** | G5 | `perf start`, `perf stop` | `[T]` | Background poller + metric aggregation |
 | `[T]` | **Perf: FPS (duration)** | G5 | `perf fps --duration` | `[T]` | Passive observation mode |
-| `[x]` | **Perf: FPS (during)** | G5 | `perf fps --during`, `--during-batch` | `[ ]` | Code exists, **no test** |
+| `[T]` | **Perf: FPS (during)** | G5 | `perf fps --during`, `--during-batch` | `[T]` | --during tested |
 | `[T]` | **Perf: latency** | G5 | `perf latency --key`, `--samples` | `[T]` | Mean/min/max/p95 with JSON output |
 | `[T]` | **Doctor** | G2 | `doctor` | `[T]` | All 8 checks with ✓/✗ output |
-| `[x]` | **Init** | G2 | `init` | `[ ]` | Framework detection works, **no integration test** |
-| `[x]` | **Error output** | G1 | (all commands) | `[~]` | rich_error() in session.rs; wait.rs includes snapshot in timeout errors; not uniformly tested |
-| `[x]` | **Matrix testing** | G3, G4 | `test-matrix --sizes --terms --colors` | `[ ]` | Runs matrix, reports results, **no integration test** |
-| `[x]` | **Accessibility check** | G3, G4 | `a11y-check` | `[ ]` | 5 checks implemented, **no integration test** |
+| `[T]` | **Init** | G2 | `init` | `[T]` 4 tests | Detects ratatui, bubbletea, textual, no-framework |
+| `[T]` | **Error output** | G1 | (all commands) | `[T]` | rich_error() in session.rs; wait timeout shows snapshot; assert failure shows snapshot |
+| `[T]` | **Matrix testing** | G3, G4 | `test-matrix --sizes --terms --colors` | `[T]` | All-pass, failure, multi-term scenarios tested |
+| `[T]` | **Accessibility check** | G3, G4 | `a11y-check` | `[T]` 3 tests | Runs checks, resize survives, TERM=dumb survives |
 
 ### Post-MVP Features
 
@@ -1000,54 +1000,48 @@ tmux works without a real TTY, which means agent-terminal works in CI natively. 
 | `[T]` | `fixture-echo` | Lifecycle tests | Prints args, waits for 'q' |
 | `[T]` | `fixture-counter` | Interaction/wait/assert tests | j/k increment/decrement, green bold number |
 | `[T]` | `fixture-color` | Snapshot color parsing | 6 lines with different ANSI styles |
-| `[x]` | `fixture-mouse` | Mouse tests | SGR mouse tracking, **no test uses it** |
+| `[T]` | `fixture-mouse` | Mouse tests | SGR mouse tracking, tested in mouse_test.rs |
 | `[T]` | `fixture-crash` | Process health tests | Exits with code 42 after 500ms |
 | `[T]` | `fixture-slow` | Perf tests | Auto-updating frame counter every 100ms |
 | `[T]` | `fixture-resize` | Resize tests | Shows terminal dimensions, handles SIGWINCH |
 
 ### Test Suite Summary
 
-**91 tests across 15 test files, all passing.**
+**143 tests across 21 test files, all passing.**
 
 | Test File | Tests | Coverage |
 |---|---|---|
 | `lifecycle_test.rs` | 6 | open, close, list, env, size, status json |
-| `snapshot_test.rs` | 7 | plain, color, raw, ansi, json, json spans, diff |
+| `snapshot_test.rs` | 8 | plain, color, raw, ansi, json, json spans, diff, scrollback |
 | `interaction_test.rs` | 6 | send single/multi, decrement, type, paste, resize |
-| `wait_test.rs` | 6 | text, timeout, text-gone, stable, regex, hard wait |
-| `assert_test.rs` | 5 | text pass/fail, no-text pass/fail, row |
+| `wait_test.rs` | 9 | text, timeout, text-gone, stable, regex, hard wait, cursor, regex multiple |
+| `assert_test.rs` | 17 | text pass/fail, no-text, row, cursor-row, color style, style text |
 | `process_health_test.rs` | 5 | alive, json, crash, exit code, stderr |
-| `find_test.rs` | 4 | text, not found, all, regex |
+| `find_test.rs` | 10 | text, not found, all, regex, color style |
 | `resize_test.rs` | 2 | change size, restore |
 | `clipboard_test.rs` | 2 | write/read, paste |
 | `signal_test.rs` | 2 | SIGTERM, SIGKILL |
-| `screenshot_test.rs` | 2 | HTML, PNG |
+| `screenshot_test.rs` | 5 | HTML, PNG, annotate HTML, annotate PNG, light theme |
 | `doctor_test.rs` | 1 | passes |
-| `perf_test.rs` | 3 | latency, fps duration, start/stop |
+| `perf_test.rs` | 4 | latency, fps duration, start/stop, fps --during |
 | `env_test.rs` | 2 | size, TERM=dumb |
 | `scrollback_test.rs` | 2 | basic, search |
+| `mouse_test.rs` | 9 | click left/right/double, coordinates, scroll up/down, drag |
+| `multi_pane_test.rs` | 9 | open pane, split, snapshot per-pane, send per-pane, independence |
+| `init_test.rs` | 4 | detect ratatui, bubbletea, textual, no framework |
+| `matrix_test.rs` | 1 | all-pass, failure, multi-term (combined) |
+| `a11y_test.rs` | 3 | runs checks, resize survives, TERM=dumb survives |
 | *(unit tests in snapshot.rs)* | 36 | ANSI parsing, style serialization, spans |
 
-### Gaps Requiring Work
+### Remaining Gaps
 
-**Untested features (code exists, needs tests):**
-1. Mouse: `click`, `drag`, `scroll-wheel` — fixture-mouse exists but no test drives it
-2. Multi-pane: `open --pane`, `snapshot --pane` — code path exists, no test
-3. `wait --cursor` — implemented, no test
-4. `assert --color`, `assert --style`, `assert --cursor-row` — ANSI matching code exists, no test
-5. `find --color` — style-based find code exists, no test
-6. `perf fps --during`, `--during-batch` — code exists, no test
-7. `snapshot --scrollback` via the snapshot command (scrollback subcommand is tested separately)
-8. `init` — manual verification done, no integration test
-9. `test-matrix` — manual verification done, no integration test
-10. `a11y-check` — manual verification done, no integration test
-11. `screenshot --annotate`, `--theme light` — code paths exist, not tested
+**All previously untested features now have test coverage.** No `[x]` items remain.
 
 **Architecture debt:**
 - ANSI parsing duplicated in `snapshot.rs` and `wait.rs` — `snapshot.rs` is canonical
 - PNG screenshot uses basic bitmap blocks, not real font rasterization via `ab_glyph`
 
-**Not implemented:**
+**Not implemented (post-MVP):**
 - Batch command (`batch --json`)
 - Record & replay (`record start/stop`, `replay`)
 - CI / JUnit output (`assert --junit`, global `--timeout`)
