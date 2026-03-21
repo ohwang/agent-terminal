@@ -1,279 +1,308 @@
-# Snapshot Output Formats
+# Snapshot Format Reference
 
-`agent-terminal snapshot` supports six output modes. They are mutually exclusive -- specify at most one flag.
+The `snapshot` command supports six output formats. This document describes each format with examples.
 
 ---
 
 ## Plain Text (default)
 
-The default format. Row-numbered, with a metadata header showing terminal size, cursor position, and session name.
+The default output format. Includes a metadata header, separator line, and numbered rows.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --session myapp
+agent-terminal snapshot --session test1
 ```
 
-Output:
+**Output structure:**
+
 ```
-[size: 80x24  cursor: 3,12  session: myapp]
+[size: 80x24  cursor: 3,1  session: test1]
 -----------------------------------------
-  1| File  Edit  View  Help
-  2| ---------------------
-  3| > item one
-  4|   item two
-  5|   item three
+  1| Welcome to my-app
+  2|
+  3| > Option A
+  4|   Option B
+  5|   Option C
   6|
-  7|
-  ...
+  7| [q]uit  [Enter] select
+  8|
+  9|
+ 10|
+ ...
  24|
 ```
 
-**When to use**: default for all general observation. Row numbers give a coordinate system for reasoning about positions.
+**Header fields:**
 
-The cursor position uses 0-indexed row and column values from tmux.
+| Field | Description |
+|-------|-------------|
+| `size` | Terminal dimensions as `COLSxROWS` |
+| `cursor` | Current cursor position as `row,col` (1-indexed) |
+| `session` | Session name |
+
+**Row format:** Right-justified line number, pipe separator, then the row content. Empty rows below content are included up to the terminal height.
 
 ---
 
-## Color Annotated (`--color`)
+## Color (`--color`)
 
-Same as plain text, but each line with non-default styling gets a bracketed annotation showing the dominant style.
+Annotated format that includes style information for each row. Style annotations appear in square brackets before the text they apply to.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --color --session myapp
+agent-terminal snapshot --color --session test1
 ```
 
-Output:
+**Output structure:**
+
 ```
-[size: 80x24  cursor: 3,12  session: myapp]
+[size: 80x24  cursor: 3,1  session: test1]
 -----------------------------------------
-  1| File  Edit  View  Help              [fg:white bold]
-  2| ---------------------               [fg:bright-black]
-  3| > item one                          [fg:green bold reverse]
-  4|   item two
-  5|   Error: file not found             [fg:red]
-  6|   ======== 60%                      [fg:blue]
+  1| [bold]Welcome to my-app[/bold]
+  2|
+  3| [fg:green bold]> Option A[/fg:green bold]
+  4|   Option B
+  5|   Option C
+  6|
+  7| [dim][q]uit  [Enter] select[/dim]
 ```
 
-Lines with default styling have no annotation. The annotation shows the dominant style on that line (the style covering the most non-whitespace characters).
+**Style annotations:**
 
-**Style values**: `fg:<color>`, `bg:<color>`, `bold`, `dim`, `italic`, `underline`, `blink`, `reverse`, `strikethrough`.
+| Annotation | Meaning |
+|------------|---------|
+| `[bold]` | Bold text |
+| `[dim]` | Dimmed text |
+| `[italic]` | Italic text |
+| `[underline]` | Underlined text |
+| `[fg:COLOR]` | Foreground color (e.g., `fg:red`, `fg:green`, `fg:#ff0000`) |
+| `[bg:COLOR]` | Background color |
+| `[reverse]` | Reversed fg/bg |
 
-**Color names**: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `bright-black` through `bright-white`, `color(N)` for 256-color palette, `rgb(R,G,B)` for true color.
-
-**When to use**: when you need to verify colors/styles without the complexity of JSON. Good for quick checks like "is the error message red?" or "is the selected item highlighted?"
+Annotations nest: `[fg:red bold]Error[/fg:red bold]`.
 
 ---
 
 ## Raw (`--raw`)
 
-Exact byte stream from `tmux capture-pane -e -p` with zero post-processing. No row numbers, no metadata header, no parsing.
+Direct tmux capture-pane output with no formatting, headers, or line numbers. Useful for piping to other tools.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --raw --session myapp
+agent-terminal snapshot --raw --session test1
 ```
 
-Output:
+**Output structure:**
+
 ```
-\033[1;37mFile  Edit  View  Help\033[0m
-\033[90m---------------------\033[0m
-\033[1;32;7m> item one\033[0m
-\033[0m  item two\033[0m
-\033[31mError: file not found\033[0m
+Welcome to my-app
+
+> Option A
+  Option B
+  Option C
+
+[q]uit  [Enter] select
+
+
+
 ```
 
-(Above shows escape sequences as `\033[...` for readability -- the actual output contains raw ESC bytes.)
-
-**When to use**:
-- Testing that your app emits correct escape sequences
-- Piping to external tools (e.g., `agent-terminal snapshot --raw | aha > output.html`)
-- Debugging cursor movement or non-SGR escape sequences that other modes discard
-- Byte-level regression testing (diff raw snapshots across versions)
+No header. No line numbers. No separator. Trailing spaces on each row are preserved. Rows extend to the full terminal width.
 
 ---
 
 ## ANSI (`--ansi`)
 
-Middle ground: preserves raw ANSI escape sequences but adds row numbers and the metadata header.
+Raw ANSI escape sequences with row numbers. Preserves the original terminal escape codes for exact color reproduction.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --ansi --session myapp
+agent-terminal snapshot --ansi --session test1
 ```
 
-Output:
+**Output structure:**
+
 ```
-[size: 80x24  cursor: 3,12  session: myapp]
------------------------------------------
-  1| \033[1;37mFile  Edit  View  Help\033[0m
-  2| \033[90m---------------------\033[0m
-  3| \033[1;32;7m> item one\033[0m
-  4| \033[0m  item two\033[0m
-  5| \033[31mError: file not found\033[0m
+  1| \e[1mWelcome to my-app\e[0m
+  2|
+  3| \e[32;1m> Option A\e[0m
+  4|   Option B
+  5|   Option C
+  6|
+  7| \e[2m[q]uit  [Enter] select\e[0m
 ```
 
-**When to use**: when you need the raw escape sequences for debugging but also want the spatial orientation (row numbers and size/cursor info) that the other formatted modes provide.
+The escape sequences are actual ANSI codes (shown here as `\e[...]` for readability). When printed to a terminal that supports ANSI, colors and styles render correctly.
 
 ---
 
 ## JSON (`--json`)
 
-Structured JSON output with full text and per-line color span data.
+Full structured output with metadata, rows, cursor position, and style spans. Best for programmatic processing.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --json --session myapp
+agent-terminal snapshot --json --session test1
 ```
 
-Output:
+**Output structure:**
+
 ```json
 {
-  "session": "myapp",
+  "session": "test1",
   "size": {
     "cols": 80,
     "rows": 24
   },
   "cursor": {
     "row": 3,
-    "col": 12
+    "col": 1,
+    "visible": true
   },
-  "lines": [
+  "rows": [
     {
       "row": 1,
-      "text": "File  Edit  View  Help",
+      "text": "Welcome to my-app",
       "spans": [
         {
           "start": 0,
-          "end": 22,
-          "fg": "white",
-          "bold": true
+          "end": 18,
+          "style": {
+            "bold": true,
+            "fg": null,
+            "bg": null
+          }
         }
       ]
     },
     {
       "row": 2,
-      "text": "---------------------",
-      "spans": [
-        {
-          "start": 0,
-          "end": 21,
-          "fg": "bright-black"
-        }
-      ]
+      "text": "",
+      "spans": []
     },
     {
       "row": 3,
-      "text": "> item one",
+      "text": "> Option A",
       "spans": [
         {
           "start": 0,
           "end": 10,
-          "fg": "green",
-          "bold": true,
-          "reverse": true
-        }
-      ]
-    },
-    {
-      "row": 5,
-      "text": "Error: file not found",
-      "spans": [
-        {
-          "start": 0,
-          "end": 6,
-          "fg": "red",
-          "bold": true
-        },
-        {
-          "start": 6,
-          "end": 21,
-          "fg": "red"
+          "style": {
+            "bold": true,
+            "fg": "green",
+            "bg": null
+          }
         }
       ]
     }
-  ]
+  ],
+  "title": "my-app",
+  "timestamp": "2026-03-21T10:30:00Z"
 }
 ```
 
-### JSON Schema
-
-Top level:
+**Top-level fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `session` | string | Session name |
-| `size.cols` | number | Terminal width in columns |
-| `size.rows` | number | Terminal height in rows |
-| `cursor.row` | number | Cursor row (0-indexed) |
-| `cursor.col` | number | Cursor column (0-indexed) |
-| `lines` | array | Array of Line objects |
+| `size` | object | `cols` and `rows` as integers |
+| `cursor` | object | `row`, `col` (1-indexed), `visible` (boolean) |
+| `rows` | array | Array of row objects |
+| `title` | string | Terminal title (if set by the app) |
+| `timestamp` | string | ISO 8601 capture time |
 
-Each Line:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `row` | number | 1-indexed row number |
-| `text` | string | Plain text content (ANSI stripped) |
-| `spans` | array | Array of Span objects |
-
-Each Span:
+**Row object fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `start` | number | Start character index (0-indexed, inclusive) |
-| `end` | number | End character index (0-indexed, exclusive) |
-| `fg` | string? | Foreground color name (omitted if default) |
-| `bg` | string? | Background color name (omitted if default) |
-| `bold` | bool? | Present and true if bold (omitted if false) |
-| `dim` | bool? | Present and true if dim (omitted if false) |
-| `italic` | bool? | Present and true if italic (omitted if false) |
-| `underline` | bool? | Present and true if underline (omitted if false) |
-| `blink` | bool? | Present and true if blink (omitted if false) |
-| `reverse` | bool? | Present and true if reverse video (omitted if false) |
-| `strikethrough` | bool? | Present and true if strikethrough (omitted if false) |
+| `row` | integer | Row number (1-indexed) |
+| `text` | string | Plain text content of the row |
+| `spans` | array | Array of style span objects |
 
-### Color Formats in JSON
+**Span object fields:**
 
-| Format | Example | Description |
-|--------|---------|-------------|
-| Named basic | `"red"`, `"blue"` | Standard 8 ANSI colors |
-| Named bright | `"bright-red"`, `"bright-cyan"` | Bright/high-intensity variants |
-| 256-color | `"color(178)"` | xterm-256 palette index |
-| True color | `"rgb(255,128,0)"` | 24-bit RGB |
+| Field | Type | Description |
+|-------|------|-------------|
+| `start` | integer | Start column (0-indexed into text) |
+| `end` | integer | End column (exclusive) |
+| `style` | object | Style properties |
 
-**When to use**: programmatic processing, detailed color assertions, or when you need exact span boundaries. Most verbose but most precise.
+**Style object fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bold` | bool | Bold |
+| `dim` | bool | Dim |
+| `italic` | bool | Italic |
+| `underline` | bool | Underline |
+| `reverse` | bool | Reversed colors |
+| `fg` | string or null | Foreground color name or hex |
+| `bg` | string or null | Background color name or hex |
 
 ---
 
 ## Diff (`--diff`)
 
-Shows what changed since the last snapshot of the same session.
+Shows only rows that changed since the last snapshot for the same session. Unchanged rows are omitted. Changed rows are marked with `~`, new content with `+`, removed content with `-`.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --diff --session myapp
+agent-terminal snapshot --diff --session test1
 ```
 
-Output shows lines that changed, prefixed with `+` (added/modified) and `-` (removed/modified):
+**Output structure (after moving cursor from Option A to Option B):**
 
 ```
-[size: 80x24  cursor: 4,12  session: myapp  diff]
+[size: 80x24  cursor: 4,1  session: test1  diff: 2 rows changed]
 -----------------------------------------
-- 3| > item one                          [selected]
-+ 3|   item one
-- 4|   item two
-+ 4| > item two                          [selected]
+  3|~  Option A
+  4|~> Option B
 ```
 
-Unchanged lines are omitted to reduce output.
+**Markers:**
 
-**When to use**: after sending a key, to see exactly what changed. Reduces the amount of output to reason about when only one or two lines changed. Particularly useful for list navigation, form input, or any incremental UI update.
+| Marker | Meaning |
+|--------|---------|
+| `~` | Row content changed |
+| `+` | New row (previously empty) |
+| `-` | Row cleared (previously had content) |
+| _(no marker)_ | Row unchanged (omitted from output) |
+
+If no previous snapshot exists for the session, the diff output is identical to the full plain-text snapshot with all rows marked `+`.
 
 ---
 
-## Combining with `--scrollback`
+## Scrollback Integration
 
-The `--scrollback N` flag can be combined with the default (plain text) mode to include N lines of scrollback above the current viewport:
+The `--scrollback N` flag can be combined with any format (except `--raw`) to include N lines from the scrollback buffer above the current viewport.
+
+**Usage:**
 
 ```bash
-agent-terminal snapshot --scrollback 50 --session myapp
+agent-terminal snapshot --scrollback 10 --session test1
 ```
 
-This prepends scrollback content above the visible viewport, useful for scrolling CLI apps where important output may have scrolled off screen.
+**Output structure:**
 
-Note: `--scrollback` is most useful for scrolling CLI apps (REPLs, build output). For full-screen TUI apps that use the alternate screen buffer, scrollback contains pre-TUI shell output and is generally not useful.
+```
+[size: 80x24  cursor: 1,0  session: test1  scrollback: 10]
+-----------------------------------------
+ -10| previous output line 1
+  -9| previous output line 2
+  ...
+  -1| previous output line 10
+  ---- viewport ----
+   1| current visible line 1
+   2| current visible line 2
+  ...
+  24|
+```
+
+Scrollback lines are numbered with negative indices. A separator marks the boundary between scrollback and the visible viewport.

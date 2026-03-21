@@ -1,157 +1,106 @@
-# Session Management
+# Session Management Guide
 
-agent-terminal uses tmux sessions as the runtime container for terminal applications. Every command targets a session by name.
+How agent-terminal uses tmux sessions, and strategies for isolation, parallelism, and cleanup.
 
 ---
 
 ## Default Session
 
-If `--session` is omitted, the default name `agent-terminal` is used:
+When `--session` is omitted, all commands use the default session name `agent-terminal`.
 
 ```bash
-agent-terminal open "htop"           # creates session "agent-terminal"
-agent-terminal snapshot              # reads from session "agent-terminal"
-agent-terminal close                 # kills session "agent-terminal"
+# These are equivalent:
+agent-terminal open "./my-app"
+agent-terminal open "./my-app" --session agent-terminal
 ```
 
-This is convenient for quick one-off usage, but for anything beyond a single test, use named sessions.
+The default session is convenient for single-test scenarios. For anything involving multiple concurrent tests, use named sessions.
 
 ---
 
 ## Named Sessions
 
-Use `--session <name>` to create isolated sessions:
+Give each test its own session name to avoid collisions.
 
 ```bash
-agent-terminal open "./my-app" --session mytest
-agent-terminal snapshot --session mytest
-agent-terminal send "q" --session mytest
-agent-terminal close --session mytest
+agent-terminal open "./my-app" --session test-navigation
+agent-terminal open "./my-app" --session test-resize
+agent-terminal open "./my-app" --session test-colors
 ```
 
-Session names must be valid tmux session names (alphanumeric, hyphens, underscores, dots).
+### Naming Conventions
 
-### Listing Sessions
+**By test purpose:**
 
 ```bash
-agent-terminal list
+--session test-nav
+--session test-input
+--session test-perf
 ```
 
-Shows all active tmux sessions (not just agent-terminal ones). Sessions with names starting with `agent-terminal` are tagged.
-
----
-
-## Multi-Pane Sessions
-
-A single session can have multiple panes for testing apps that need companion processes (server + client, watcher + editor, etc.).
-
-### Creating Panes
-
-The first `open` creates the session. Subsequent `open` calls with `--pane` split the existing session:
+**By PID (for bash scripts running in parallel):**
 
 ```bash
-# Create session with the server
-agent-terminal open "npm run dev" --session myapp --pane server
-
-# Add a test runner in a second pane
-agent-terminal open "npm run test:watch" --session myapp --pane tests
+--session "test-$$"       # e.g., test-48231
 ```
 
-The `--pane` flag on the first open is optional (the session gets created regardless). On subsequent opens, `--pane` creates a new horizontal split within the existing session.
-
-### Targeting Panes
-
-Use `--pane` on observation and interaction commands to target a specific pane:
+**By timestamp:**
 
 ```bash
-agent-terminal snapshot --session myapp --pane server
-agent-terminal snapshot --session myapp --pane tests
-agent-terminal send "q" --session myapp --pane server
-agent-terminal status --session myapp --pane server
+--session "test-$(date +%s)"
 ```
 
-Without `--pane`, commands target the default (first) pane.
-
-### Multi-Pane Example
+**By CI job:**
 
 ```bash
-# Start a web server and a TUI client
-agent-terminal open "python -m http.server 8080" --session demo --pane server
-agent-terminal wait --stable 500 --session demo
-agent-terminal open "./tui-client http://localhost:8080" --session demo --pane client
-
-# Wait for client to connect
-agent-terminal wait --text "Connected" --session demo --pane client
-
-# Interact with the client
-agent-terminal send "Enter" --session demo --pane client
-agent-terminal wait --stable 300 --session demo --pane client
-agent-terminal snapshot --session demo --pane client
-
-# Check server logs
-agent-terminal snapshot --session demo --pane server
-
-# Clean up (closes all panes)
-agent-terminal close --session demo
+--session "ci-${CI_JOB_ID:-local}"
 ```
 
 ---
 
-## Parallel Test Isolation
+## Multi-Pane Support
 
-When running tests in parallel (CI, or multiple test files), each test must use a unique session name to avoid collisions.
-
-### Strategy 1: PID-based names (bash)
+A single session can contain multiple named panes. This is useful for testing client/server architectures or multi-process setups.
 
 ```bash
-SESSION="test-$$"
-agent-terminal open "./my-app" --session "$SESSION"
-# ... test ...
-agent-terminal close --session "$SESSION"
+# Start a server in one pane
+agent-terminal open "./server" --session mytest --pane server
+
+# Start a client in another pane
+agent-terminal open "./client" --session mytest --pane client
 ```
 
-`$$` is the shell PID -- unique per bash process.
-
-### Strategy 2: Descriptive names
+Observation and interaction commands accept `--pane` to target a specific pane:
 
 ```bash
-agent-terminal open "./my-app" --session "test-resize"
-agent-terminal open "./my-app" --session "test-input"
-agent-terminal open "./my-app" --session "test-colors"
+# Snapshot the server pane
+agent-terminal snapshot --session mytest --pane server
+
+# Type into the client pane
+agent-terminal type "connect localhost:8080" --session mytest --pane client
+
+# Check status of both
+agent-terminal status --session mytest --pane server
+agent-terminal status --session mytest --pane client
 ```
 
-### Strategy 3: UUID-based names
+When `--pane` is omitted, commands target the first (default) pane.
+
+### Closing Multi-Pane Sessions
+
+`close` kills the entire session, including all panes:
 
 ```bash
-SESSION="test-$(uuidgen | head -c 8)"
-agent-terminal open "./my-app" --session "$SESSION"
+agent-terminal close --session mytest   # kills both server and client panes
 ```
-
-### What Happens on Collision
-
-If you try to `open` a session that already exists, agent-terminal returns an error:
-
-```
-ERROR: Session 'test' already exists. Close it first or use a different name.
-```
-
-This is by design -- silent reuse could mask bugs.
 
 ---
 
-## Cleanup
+## Session Cleanup
 
-### Manual Cleanup
+### Trap Pattern (Bash Scripts)
 
-```bash
-agent-terminal close --session mytest
-```
-
-This kills the tmux session and removes temp files (`/tmp/agent-terminal-<session>-stderr`, `/tmp/agent-terminal-<session>-exit`).
-
-### Automatic Cleanup with `trap` (bash)
-
-Always use `trap` in test scripts to clean up on failure:
+Always use a trap to ensure cleanup on exit, error, or interrupt:
 
 ```bash
 #!/usr/bin/env bash
@@ -165,81 +114,148 @@ cleanup() {
 trap cleanup EXIT
 
 agent-terminal open "./my-app" --session "$SESSION"
-# ... tests ...
+# ... run test ...
 agent-terminal close --session "$SESSION"
-trap - EXIT   # clear the trap on success
+trap - EXIT
 ```
 
-The `trap cleanup EXIT` runs even if the script fails with `set -e` or is interrupted with Ctrl+C.
+The `2>/dev/null || true` ensures cleanup never fails -- if the session is already gone, the error is silently ignored.
 
-### Cleaning Up All Sessions
+### Manual Cleanup
 
-If sessions leak (e.g., a test crashed without cleanup), you can list and close them:
+List and kill stale sessions:
 
 ```bash
-# List all sessions
+# See what's running
 agent-terminal list
 
-# Close specific leaked sessions
-agent-terminal close --session at-matrix-3
-agent-terminal close --session test-12345
+# Kill a specific session
+agent-terminal close --session stale-test
 
-# Nuclear option: kill all tmux sessions (careful!)
-tmux kill-server
+# Kill all agent-terminal sessions (bash one-liner)
+agent-terminal list | while read -r name _rest; do
+    agent-terminal close --session "$name"
+done
 ```
 
-### Temp File Locations
+### Cleanup Before Test
 
-agent-terminal creates temp files scoped to each session:
+If a previous run crashed without cleanup:
 
-| File | Purpose |
-|------|---------|
-| `/tmp/agent-terminal-<session>-stderr` | Captured stderr from the process |
-| `/tmp/agent-terminal-<session>-exit` | Exit code of the process |
+```bash
+# Ensure clean slate
+agent-terminal close --session "$SESSION" 2>/dev/null || true
+agent-terminal open "./my-app" --session "$SESSION"
+```
 
-These are cleaned up by `agent-terminal close`. If sessions are killed externally (e.g., `tmux kill-session`), these files may remain. They are harmless and will be overwritten on next use.
+---
 
-Performance recording also creates temp files:
+## CI/CD Isolation
 
-| File | Purpose |
-|------|---------|
-| `/tmp/agent-terminal-perf/<session>-pid` | PID of the perf poller process |
-| `/tmp/agent-terminal-perf/<session>-frames.jsonl` | Frame change data |
-| `/tmp/agent-terminal-perf/<session>-poller.sh` | The poller script |
+### GitHub Actions
 
-These are cleaned up by `agent-terminal perf stop`.
+```yaml
+jobs:
+  tui-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tmux
+        run: sudo apt-get install -y tmux
+
+      - name: Build
+        run: cargo build --release
+
+      - name: TUI Tests
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          bash tests/tui-test.sh
+```
+
+Key points:
+- tmux works headlessly -- no display server needed.
+- Each job gets a fresh VM, so session names do not collide across jobs.
+- Within a single job, use unique session names if running multiple tests.
+
+### Parallel Test Jobs
+
+When running tests in parallel (e.g., matrix strategy), session names are already isolated because each job runs in a separate VM/container. Within a single job, use unique names:
+
+```bash
+# Run tests in parallel within one job
+for test_file in tests/tui-*.sh; do
+    bash "$test_file" &
+done
+wait
+```
+
+Each test script should use `SESSION="test-$$"` to get a unique session name per process.
+
+### Docker
+
+tmux works inside Docker containers. The container provides natural isolation:
+
+```dockerfile
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y tmux
+COPY agent-terminal /usr/local/bin/
+COPY my-app /usr/local/bin/
+COPY tests/ /tests/
+CMD ["bash", "/tests/run-all.sh"]
+```
 
 ---
 
 ## Session Lifecycle Diagram
 
 ```
-open --session s1
-  |
-  v
-[tmux session "s1" created, command running]
-  |
-  |-- snapshot, send, type, wait, assert, find, click, ...
-  |   (all target --session s1)
-  |
-  |-- open --session s1 --pane p2
-  |   (splits session, creates second pane)
-  |
-  |-- status --session s1
-  |   (check if process is alive)
-  |
-  v
-close --session s1
-  |
-  v
-[session killed, temp files removed]
+open          wait --stable     snapshot/send/wait     close
+  |               |                    |                 |
+  v               v                    v                 v
+[create] --> [stabilize] --> [observe/interact loop] --> [kill]
+  tmux           app                  test              tmux
+  session        renders              logic             session
+  starts         first                runs              destroyed
+                 frame
 ```
 
 ---
 
-## Tips
+## Troubleshooting
 
-- Use descriptive session names in test scripts for debugging: `test-resize-small`, `test-nocolor`, `test-vim-bindings`.
-- The `test-matrix` command handles session naming automatically -- each combination gets `at-matrix-N`.
-- Session names are visible in `tmux list-sessions` if you need to debug manually.
-- If Claude is running multiple tests, it should use unique session names for each and can run them sequentially without conflicts.
+### "Session already exists"
+
+A previous run did not clean up. Fix:
+
+```bash
+agent-terminal close --session <name>
+```
+
+### "No such session"
+
+The session was never created or was already closed. Check:
+
+```bash
+agent-terminal list
+```
+
+### "Permission denied" on tmux socket
+
+This can happen in CI environments with strict `/tmp` permissions. Verify with:
+
+```bash
+agent-terminal doctor
+```
+
+### Sessions accumulating in development
+
+During development, sessions may pile up. Periodic cleanup:
+
+```bash
+# List all sessions
+agent-terminal list
+
+# Close all
+agent-terminal list | awk '{print $1}' | xargs -I{} agent-terminal close --session {}
+```

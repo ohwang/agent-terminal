@@ -1,512 +1,550 @@
-# Common TUI Testing Patterns
+# Common Testing Patterns
 
-Reusable patterns for testing terminal applications with agent-terminal.
+Reusable patterns for testing terminal applications with agent-terminal. Each pattern includes a complete, working example.
 
 ---
 
-## Basic Lifecycle Test
+## 1. Basic Lifecycle Test
 
-The minimal test pattern: open, verify render, clean up.
+The simplest test: launch, verify initial render, close.
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-
-SESSION="test-lifecycle-$$"
+SESSION="test-$$"
 cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
 trap cleanup EXIT
 
-# Open and wait for stable render
-agent-terminal open "./my-app" --session "$SESSION" --size 80x24
+# Launch
+agent-terminal open "./my-app" --session "$SESSION"
+
+# Wait for first render
 agent-terminal wait --stable 500 --session "$SESSION"
 
-# Verify the app rendered
+# Verify the app started correctly
 agent-terminal snapshot --session "$SESSION"
-agent-terminal assert --text "expected content" --session "$SESSION"
-
-# Verify process is alive
-agent-terminal status --session "$SESSION" --json
+agent-terminal assert --text "Welcome" --session "$SESSION"
 
 # Clean up
 agent-terminal close --session "$SESSION"
 trap - EXIT
-echo "PASS: lifecycle test"
+echo "PASS: basic lifecycle"
 ```
 
 ---
 
-## Testing Keyboard Navigation
+## 2. Keyboard Navigation
 
-Verify arrow keys, vim bindings, or tab navigation move focus correctly.
+Test arrow keys, vim keys, Tab, and selection in a list or menu.
 
 ```bash
-SESSION="test-nav-$$"
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
 cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
 trap cleanup EXIT
 
 agent-terminal open "./my-app" --session "$SESSION"
 agent-terminal wait --stable 500 --session "$SESSION"
 
-# Verify initial selection
-agent-terminal snapshot --session "$SESSION"
-agent-terminal assert --row 3 --row-text "> Item 1" --session "$SESSION"
+# Verify initial selection is on first item
+agent-terminal assert --text "> Item 1" --session "$SESSION"
 
-# Move down
-agent-terminal send "j" --session "$SESSION"
+# Navigate down
+agent-terminal send Down --session "$SESSION"
 agent-terminal wait --stable 200 --session "$SESSION"
-agent-terminal assert --row 4 --row-text "> Item 2" --session "$SESSION"
+agent-terminal assert --text "> Item 2" --session "$SESSION"
 
-# Move down again
-agent-terminal send "j" --session "$SESSION"
+# Navigate down again
+agent-terminal send Down --session "$SESSION"
 agent-terminal wait --stable 200 --session "$SESSION"
-agent-terminal assert --row 5 --row-text "> Item 3" --session "$SESSION"
+agent-terminal assert --text "> Item 3" --session "$SESSION"
 
-# Move back up
-agent-terminal send "k" --session "$SESSION"
+# Navigate back up
+agent-terminal send Up --session "$SESSION"
 agent-terminal wait --stable 200 --session "$SESSION"
-agent-terminal assert --row 4 --row-text "> Item 2" --session "$SESSION"
+agent-terminal assert --text "> Item 2" --session "$SESSION"
 
-# Test wrap-around (if applicable)
-agent-terminal send "k" --session "$SESSION"
-agent-terminal send "k" --session "$SESSION"
-agent-terminal wait --stable 200 --session "$SESSION"
-agent-terminal snapshot --session "$SESSION"
+# Select with Enter
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --stable 300 --session "$SESSION"
+agent-terminal assert --text "Selected: Item 2" --session "$SESSION"
 
 agent-terminal close --session "$SESSION"
 trap - EXIT
-echo "PASS: navigation test"
+echo "PASS: keyboard navigation"
 ```
 
 ---
 
-## Testing Form Input
+## 3. Form Input
 
-Test typing into input fields, validating, and submitting.
+Test text input fields, tab between fields, and form submission.
 
 ```bash
-SESSION="test-form-$$"
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
 cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
 trap cleanup EXIT
 
-agent-terminal open "./my-app" --session "$SESSION"
-agent-terminal wait --text "Name:" --session "$SESSION"
+agent-terminal open "./form-app" --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
 
-# Type into the name field
+# Type into the first field (name)
 agent-terminal type "John Doe" --session "$SESSION"
 agent-terminal wait --stable 200 --session "$SESSION"
 agent-terminal assert --text "John Doe" --session "$SESSION"
 
-# Tab to next field
-agent-terminal send "Tab" --session "$SESSION"
+# Tab to the next field (email)
+agent-terminal send Tab --session "$SESSION"
 agent-terminal wait --stable 200 --session "$SESSION"
-
-# Type into email field
 agent-terminal type "john@example.com" --session "$SESSION"
 agent-terminal wait --stable 200 --session "$SESSION"
 
-# Submit the form
-agent-terminal send "Enter" --session "$SESSION"
-agent-terminal wait --text "Success" --session "$SESSION" --timeout 5000
+# Tab to submit button and press Enter
+agent-terminal send Tab --session "$SESSION"
+agent-terminal wait --stable 200 --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --text "Submitted" --session "$SESSION" --timeout 5000
 
-# Verify success message
-agent-terminal assert --text "Saved" --session "$SESSION"
-agent-terminal assert --no-text "Error" --session "$SESSION"
+agent-terminal assert --text "Submitted" --session "$SESSION"
 
 agent-terminal close --session "$SESSION"
 trap - EXIT
-echo "PASS: form input test"
+echo "PASS: form input"
 ```
 
 ---
 
-## Testing Scrollable Lists
+## 4. Scrollable List
 
-Verify scrolling behavior with long lists that extend beyond the viewport.
+Test scrolling through a long list, verifying items appear and disappear.
 
 ```bash
-SESSION="test-scroll-$$"
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
 cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
 trap cleanup EXIT
 
-agent-terminal open "./my-app" --session "$SESSION" --size 80x10
+agent-terminal open "./list-app" --session "$SESSION" --size 80x10
 agent-terminal wait --stable 500 --session "$SESSION"
 
-# Verify initial viewport shows first items
+# Verify first page
 agent-terminal assert --text "Item 1" --session "$SESSION"
 agent-terminal assert --no-text "Item 50" --session "$SESSION"
 
-# Scroll to bottom
-agent-terminal send "G" --session "$SESSION"    # vim-style go to end
+# Scroll to bottom (vim-style)
+agent-terminal send G --session "$SESSION"
 agent-terminal wait --stable 300 --session "$SESSION"
 
-# Now the last items should be visible
-agent-terminal snapshot --session "$SESSION"
-agent-terminal assert --text "Item 50" --session "$SESSION"
+# Verify we see the last items
+agent-terminal assert --text "Item 100" --session "$SESSION"
 agent-terminal assert --no-text "Item 1" --session "$SESSION"
 
 # Scroll back to top
-agent-terminal send "g" "g" --session "$SESSION"  # vim-style go to top
+agent-terminal send g g --session "$SESSION"
 agent-terminal wait --stable 300 --session "$SESSION"
 agent-terminal assert --text "Item 1" --session "$SESSION"
 
-# Test page-based scrolling
-agent-terminal send "PgDn" --session "$SESSION"
+# Page-down
+agent-terminal send PgDn --session "$SESSION"
 agent-terminal wait --stable 300 --session "$SESSION"
 agent-terminal snapshot --session "$SESSION"
 
 agent-terminal close --session "$SESSION"
 trap - EXIT
-echo "PASS: scroll test"
+echo "PASS: scrollable list"
 ```
 
 ---
 
-## Testing Resize Handling
+## 5. Resize Handling
 
-Verify the app adapts to terminal size changes without crashing.
+Verify the app adapts its layout when the terminal is resized.
 
 ```bash
-SESSION="test-resize-$$"
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
 cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
 trap cleanup EXIT
 
 agent-terminal open "./my-app" --session "$SESSION" --size 80x24
 agent-terminal wait --stable 500 --session "$SESSION"
 
-# Capture baseline
-agent-terminal snapshot --session "$SESSION"
-BASELINE_STATUS=$(agent-terminal status --session "$SESSION" --json)
+# Verify normal layout
+agent-terminal assert --text "Sidebar" --session "$SESSION"
+agent-terminal assert --text "Main Content" --session "$SESSION"
 
-# Resize small
+# Shrink to narrow width -- sidebar should collapse
+agent-terminal resize 40 24 --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+agent-terminal snapshot --session "$SESSION"
+agent-terminal assert --no-text "Sidebar" --session "$SESSION"
+agent-terminal assert --text "Main Content" --session "$SESSION"
+
+# Shrink height -- footer should hide
 agent-terminal resize 40 10 --session "$SESSION"
 agent-terminal wait --stable 500 --session "$SESSION"
+agent-terminal assert --no-text "Footer" --session "$SESSION"
 
-# Verify still alive
-agent-terminal status --session "$SESSION" --json
-agent-terminal snapshot --session "$SESSION"
-
-# Resize very small (edge case)
-agent-terminal resize 20 5 --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-agent-terminal status --session "$SESSION" --json
-
-# Resize back to normal
+# Restore original size -- everything should come back
 agent-terminal resize 80 24 --session "$SESSION"
 agent-terminal wait --stable 500 --session "$SESSION"
-
-# Verify app recovered
-agent-terminal snapshot --session "$SESSION"
-agent-terminal status --session "$SESSION" --json
-
-# Resize wide
-agent-terminal resize 200 50 --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-agent-terminal snapshot --session "$SESSION"
+agent-terminal assert --text "Sidebar" --session "$SESSION"
+agent-terminal assert --text "Footer" --session "$SESSION"
 
 agent-terminal close --session "$SESSION"
 trap - EXIT
-echo "PASS: resize test"
+echo "PASS: resize handling"
 ```
 
 ---
 
-## Testing Color and Theme
+## 6. Color and Theme Verification
 
-Verify correct use of colors and styles.
-
-```bash
-SESSION="test-color-$$"
-cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
-trap cleanup EXIT
-
-agent-terminal open "./my-app" --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Check that error messages are red
-agent-terminal assert --style "Error" --style-check "fg:red" --session "$SESSION"
-
-# Check that selected items are highlighted
-agent-terminal assert --color 3 --color-style "reverse" --session "$SESSION"
-
-# Check that the header is bold
-agent-terminal assert --color 1 --color-style "bold" --session "$SESSION"
-
-# Take a color-annotated snapshot for review
-agent-terminal snapshot --color --session "$SESSION"
-
-# Test NO_COLOR compliance
-agent-terminal close --session "$SESSION"
-agent-terminal open "./my-app" --session "$SESSION" --env NO_COLOR=1
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Verify no color codes with NO_COLOR=1
-agent-terminal snapshot --raw --session "$SESSION"
-# (inspect output -- should have no ANSI color sequences)
-
-agent-terminal close --session "$SESSION"
-trap - EXIT
-echo "PASS: color test"
-```
-
----
-
-## Testing Signal Handling
-
-Verify graceful shutdown and signal responses.
-
-```bash
-SESSION="test-signal-$$"
-cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
-trap cleanup EXIT
-
-agent-terminal open "./my-app" --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Test Ctrl+C (graceful exit)
-agent-terminal send "C-c" --session "$SESSION"
-agent-terminal wait --stable 1000 --session "$SESSION"
-
-# Check if the app shut down cleanly
-STATUS=$(agent-terminal status --session "$SESSION" --json)
-EXIT_CODE=$(agent-terminal exit-code --session "$SESSION" 2>/dev/null || echo "still running")
-
-# Verify clean exit (exit code 0 or 130 for SIGINT)
-echo "Status: $STATUS"
-echo "Exit code: $EXIT_CODE"
-
-# Start again for SIGTERM test
-agent-terminal close --session "$SESSION" 2>/dev/null || true
-agent-terminal open "./my-app" --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Send SIGTERM (real signal, not keystroke)
-agent-terminal signal SIGTERM --session "$SESSION"
-agent-terminal wait --stable 1000 --session "$SESSION"
-
-# Check for graceful shutdown
-agent-terminal logs --stderr --session "$SESSION"
-
-# Start again for suspend/resume test
-agent-terminal close --session "$SESSION" 2>/dev/null || true
-agent-terminal open "./my-app" --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Suspend
-agent-terminal signal SIGTSTP --session "$SESSION"
-sleep 1
-
-# Resume
-agent-terminal signal SIGCONT --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Verify app recovered from suspend
-agent-terminal snapshot --session "$SESSION"
-agent-terminal status --session "$SESSION" --json
-
-agent-terminal close --session "$SESSION"
-trap - EXIT
-echo "PASS: signal handling test"
-```
-
----
-
-## Performance Regression Testing
-
-Establish a baseline and detect regressions.
-
-```bash
-SESSION="test-perf-$$"
-cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
-trap cleanup EXIT
-
-agent-terminal open "./my-app" --session "$SESSION"
-agent-terminal wait --stable 500 --session "$SESSION"
-
-# Measure baseline input latency
-LATENCY=$(agent-terminal perf latency --key "j" --samples 10 --json --session "$SESSION")
-echo "Latency: $LATENCY"
-
-# Measure FPS during interaction
-agent-terminal perf start --session "$SESSION"
-
-# Perform representative interactions
-for i in $(seq 1 20); do
-    agent-terminal send "j" --session "$SESSION"
-done
-
-FPS=$(agent-terminal perf stop --json --session "$SESSION")
-echo "FPS: $FPS"
-
-# Parse and check thresholds (using jq or python)
-MEAN_LATENCY=$(echo "$LATENCY" | python3 -c "import sys,json; print(json.load(sys.stdin)['mean_ms'])")
-FPS_VAL=$(echo "$FPS" | python3 -c "import sys,json; print(json.load(sys.stdin)['fps'])")
-
-echo "Mean latency: ${MEAN_LATENCY}ms"
-echo "FPS: $FPS_VAL"
-
-# Fail if latency is too high or FPS too low
-python3 -c "
-import sys
-latency = $MEAN_LATENCY
-fps = $FPS_VAL
-if latency > 100:
-    print(f'FAIL: latency {latency}ms > 100ms threshold')
-    sys.exit(1)
-if fps < 5:
-    print(f'FAIL: FPS {fps} < 5 threshold')
-    sys.exit(1)
-print(f'PASS: latency={latency}ms fps={fps}')
-"
-
-agent-terminal close --session "$SESSION"
-trap - EXIT
-echo "PASS: performance test"
-```
-
----
-
-## Cross-Terminal Compatibility Testing
-
-Use `test-matrix` for automated multi-configuration testing.
-
-```bash
-# Quick compatibility check
-agent-terminal test-matrix \
-    --command "./my-app" \
-    --sizes "80x24,40x10,120x40" \
-    --terms "xterm-256color,screen-256color,dumb" \
-    --colors "default,NO_COLOR=1,COLORTERM=truecolor" \
-    --test "agent-terminal wait --stable 500 --session {session}; agent-terminal assert --text 'Welcome' --session {session}"
-
-# Or run the a11y-check for focused accessibility testing
-agent-terminal a11y-check "./my-app"
-```
-
-### Manual Matrix Testing
-
-For more control, run each configuration explicitly:
-
-```bash
-# Test with dumb terminal
-SESSION="test-dumb-$$"
-agent-terminal open "./my-app" --session "$SESSION" --env TERM=dumb
-agent-terminal wait --stable 1000 --session "$SESSION"
-agent-terminal status --session "$SESSION" --json
-agent-terminal snapshot --session "$SESSION"
-agent-terminal close --session "$SESSION"
-
-# Test with NO_COLOR
-SESSION="test-nocolor-$$"
-agent-terminal open "./my-app" --session "$SESSION" --env NO_COLOR=1
-agent-terminal wait --stable 1000 --session "$SESSION"
-agent-terminal snapshot --color --session "$SESSION"
-# Verify no color annotations appear
-agent-terminal close --session "$SESSION"
-
-# Test with small terminal
-SESSION="test-small-$$"
-agent-terminal open "./my-app" --session "$SESSION" --size 30x8
-agent-terminal wait --stable 1000 --session "$SESSION"
-agent-terminal status --session "$SESSION" --json
-agent-terminal snapshot --session "$SESSION"
-agent-terminal close --session "$SESSION"
-```
-
----
-
-## CI Integration Patterns
-
-### GitHub Actions
-
-```yaml
-name: TUI Tests
-on: [push, pull_request]
-
-jobs:
-  tui-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install tmux
-        run: sudo apt-get install -y tmux
-
-      - name: Install agent-terminal
-        run: cargo install agent-terminal
-
-      - name: Validate environment
-        run: agent-terminal doctor
-
-      - name: Build app
-        run: cargo build --release
-
-      - name: Run TUI tests
-        run: bash tests/tui/basic_test.sh
-
-      - name: Run matrix tests
-        run: |
-          agent-terminal test-matrix \
-            --command "./target/release/my-app" \
-            --test "agent-terminal assert --text 'Ready' --session {session}"
-
-      - name: Run accessibility check
-        run: agent-terminal a11y-check "./target/release/my-app"
-
-      - name: Upload failure artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tui-test-failures
-          path: |
-            agent-terminal-matrix/
-            a11y-report/
-```
-
-### Makefile Integration
-
-```makefile
-.PHONY: test-tui test-tui-matrix test-tui-a11y
-
-test-tui:
-	bash tests/tui/basic_test.sh
-
-test-tui-matrix:
-	agent-terminal test-matrix \
-		--command "./target/release/my-app" \
-		--sizes "80x24,40x10" \
-		--terms "xterm-256color,dumb" \
-		--test "agent-terminal assert --text 'Ready' --session {session}"
-
-test-tui-a11y:
-	agent-terminal a11y-check "./target/release/my-app"
-
-test: test-unit test-tui test-tui-matrix test-tui-a11y
-```
-
-### Script Runner Pattern
-
-For test suites with multiple test scripts:
+Verify colors, styles, and theme switching.
 
 ```bash
 #!/usr/bin/env bash
-# run_tui_tests.sh -- run all TUI test scripts
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+agent-terminal open "./my-app" --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+
+# Check that the title is bold
+agent-terminal assert --style "My App" --style-check "bold" --session "$SESSION"
+
+# Check error messages are red
+agent-terminal send "t" --session "$SESSION"  # trigger an error
+agent-terminal wait --stable 300 --session "$SESSION"
+agent-terminal assert --style "Error" --style-check "fg:red" --session "$SESSION"
+
+# Test NO_COLOR mode
+agent-terminal close --session "$SESSION"
+agent-terminal open "./my-app" --session "$SESSION" --env NO_COLOR=1
+agent-terminal wait --stable 500 --session "$SESSION"
+
+# Snapshot with color annotations -- should have no fg/bg annotations
+agent-terminal snapshot --color --session "$SESSION"
+
+# Verify the app still works without color
+agent-terminal assert --text "My App" --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: color/theme verification"
+```
+
+---
+
+## 7. Signal Handling
+
+Test graceful shutdown, interrupt recovery, and signal responses.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+agent-terminal open "./server-app" --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+agent-terminal assert --text "Listening" --session "$SESSION"
+
+# Test Ctrl+C handling (graceful shutdown)
+agent-terminal send C-c --session "$SESSION"
+agent-terminal wait --text "Shutting down" --session "$SESSION" --timeout 5000
+agent-terminal assert --text "Shutting down" --session "$SESSION"
+
+# Wait for process to exit
+agent-terminal wait --stable 1000 --session "$SESSION"
+agent-terminal status --json --session "$SESSION"
+EXIT_CODE=$(agent-terminal exit-code --session "$SESSION")
+
+if [ "$EXIT_CODE" -ne 0 ]; then
+    echo "FAIL: expected exit code 0, got $EXIT_CODE"
+    agent-terminal logs --stderr --session "$SESSION"
+    exit 1
+fi
+
+# Test SIGTERM handling
+agent-terminal close --session "$SESSION"
+agent-terminal open "./server-app" --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+
+agent-terminal signal SIGTERM --session "$SESSION"
+agent-terminal wait --stable 2000 --session "$SESSION"
+
+# Check logs for clean shutdown message
+agent-terminal logs --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: signal handling"
+```
+
+---
+
+## 8. Performance Regression
+
+Measure FPS and latency, compare against thresholds.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+MIN_FPS=10
+MAX_LATENCY_MS=100
+
+agent-terminal open "./my-app" --session "$SESSION"
+agent-terminal wait --stable 500 --session "$SESSION"
+
+# Measure FPS during typical interaction
+agent-terminal perf start --session "$SESSION"
+for i in $(seq 1 20); do
+    agent-terminal send "j" --session "$SESSION"
+done
+agent-terminal wait --stable 300 --session "$SESSION"
+PERF_JSON=$(agent-terminal perf stop --json --session "$SESSION")
+
+FPS=$(echo "$PERF_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['fps'])")
+echo "FPS: $FPS"
+
+if (( $(echo "$FPS < $MIN_FPS" | bc -l) )); then
+    echo "FAIL: FPS $FPS below threshold $MIN_FPS"
+    exit 1
+fi
+
+# Measure input latency
+LATENCY_JSON=$(agent-terminal perf latency --key "j" --samples 10 --json --session "$SESSION")
+P95=$(echo "$LATENCY_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['p95_ms'])")
+echo "P95 latency: ${P95}ms"
+
+if (( $(echo "$P95 > $MAX_LATENCY_MS" | bc -l) )); then
+    echo "FAIL: P95 latency ${P95}ms exceeds threshold ${MAX_LATENCY_MS}ms"
+    exit 1
+fi
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: performance regression"
+```
+
+---
+
+## 9. Cross-Terminal Compatibility
+
+Use test-matrix to validate across terminal configurations.
+
+```bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-PASS=0
-FAIL=0
+# Run the app across multiple sizes, TERM values, and color modes
+agent-terminal test-matrix \
+    --command "./my-app" \
+    --sizes "80x24,120x40,40x10" \
+    --terms "xterm-256color,screen-256color,dumb" \
+    --colors "default,NO_COLOR=1" \
+    --test "
+        agent-terminal wait --stable 500 --session {session};
+        agent-terminal assert --text 'Welcome' --session {session};
+        agent-terminal send 'q' --session {session};
+        agent-terminal wait --stable 500 --session {session};
+        agent-terminal status --json --session {session}
+    "
 
-for test_script in tests/tui/test_*.sh; do
-    echo "--- Running: $test_script ---"
-    if bash "$test_script"; then
-        echo "PASS: $test_script"
-        ((PASS++))
-    else
-        echo "FAIL: $test_script"
-        ((FAIL++))
-    fi
-    echo
-done
-
-echo "=== Results: $PASS passed, $FAIL failed ==="
-[ "$FAIL" -eq 0 ]
+echo "PASS: cross-terminal compatibility"
 ```
+
+---
+
+## 10. CI Integration
+
+A complete test script suitable for CI environments.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Verify environment
+agent-terminal doctor
+
+FAILURES=0
+
+run_test() {
+    local name="$1"
+    local session="ci-test-$name-$$"
+    shift
+
+    echo "--- $name ---"
+    if "$@" "$session"; then
+        echo "PASS: $name"
+    else
+        echo "FAIL: $name"
+        FAILURES=$((FAILURES + 1))
+        # Capture debug info
+        agent-terminal snapshot --session "$session" 2>/dev/null || true
+        agent-terminal logs --stderr --session "$session" 2>/dev/null || true
+    fi
+    agent-terminal close --session "$session" 2>/dev/null || true
+}
+
+test_startup() {
+    local session="$1"
+    agent-terminal open "./my-app" --session "$session"
+    agent-terminal wait --stable 500 --session "$session"
+    agent-terminal assert --text "Welcome" --session "$session"
+}
+
+test_navigation() {
+    local session="$1"
+    agent-terminal open "./my-app" --session "$session"
+    agent-terminal wait --stable 500 --session "$session"
+    agent-terminal send Down --session "$session"
+    agent-terminal wait --stable 200 --session "$session"
+    agent-terminal assert --text "> Item 2" --session "$session"
+}
+
+test_quit() {
+    local session="$1"
+    agent-terminal open "./my-app" --session "$session"
+    agent-terminal wait --stable 500 --session "$session"
+    agent-terminal send "q" --session "$session"
+    agent-terminal wait --stable 1000 --session "$session"
+    local code
+    code=$(agent-terminal exit-code --session "$session")
+    [ "$code" -eq 0 ]
+}
+
+run_test "startup" test_startup
+run_test "navigation" test_navigation
+run_test "quit" test_quit
+
+echo ""
+echo "=== Results: $((3 - FAILURES))/3 passed ==="
+
+if [ "$FAILURES" -gt 0 ]; then
+    exit 1
+fi
+```
+
+---
+
+## 11. REPL Testing
+
+Test interactive REPLs (Python, Node, etc.) by typing commands and checking output.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# Start Python REPL
+agent-terminal open "python3" --session "$SESSION"
+agent-terminal wait --text ">>>" --session "$SESSION"
+
+# Run a computation
+agent-terminal type "2 + 2" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --stable 300 --session "$SESSION"
+agent-terminal assert --text "4" --session "$SESSION"
+
+# Import and use a module
+agent-terminal type "import math" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --text ">>>" --session "$SESSION"
+
+agent-terminal type "math.pi" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --stable 300 --session "$SESSION"
+agent-terminal assert --text "3.14159" --session "$SESSION"
+
+# Exit cleanly
+agent-terminal type "exit()" --session "$SESSION"
+agent-terminal send Enter --session "$SESSION"
+agent-terminal wait --stable 1000 --session "$SESSION"
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: REPL testing"
+```
+
+---
+
+## 12. Multi-Pane (Client/Server)
+
+Test a client/server setup where both run in the same session on separate panes.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SESSION="test-$$"
+cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# Start server in its own pane
+agent-terminal open "./server --port 9090" --session "$SESSION" --pane server
+agent-terminal wait --text "Listening on :9090" --session "$SESSION" --pane server --timeout 10000
+
+# Verify server is running
+agent-terminal assert --text "Listening" --session "$SESSION" --pane server
+agent-terminal status --json --session "$SESSION" --pane server
+
+# Start client in another pane
+agent-terminal open "./client --connect localhost:9090" --session "$SESSION" --pane client
+agent-terminal wait --stable 500 --session "$SESSION" --pane client
+
+# Type a message in the client
+agent-terminal type "Hello, server!" --session "$SESSION" --pane client
+agent-terminal send Enter --session "$SESSION" --pane client
+agent-terminal wait --stable 500 --session "$SESSION" --pane client
+
+# Verify client received response
+agent-terminal assert --text "Response:" --session "$SESSION" --pane client
+
+# Verify server logged the request
+agent-terminal snapshot --session "$SESSION" --pane server
+agent-terminal assert --text "Hello, server!" --session "$SESSION" --pane server
+
+# Graceful shutdown: stop client first, then server
+agent-terminal send C-c --session "$SESSION" --pane client
+agent-terminal wait --stable 500 --session "$SESSION" --pane client
+
+agent-terminal send C-c --session "$SESSION" --pane server
+agent-terminal wait --stable 500 --session "$SESSION" --pane server
+
+agent-terminal close --session "$SESSION"
+trap - EXIT
+echo "PASS: multi-pane client/server"
+```
+
+---
+
+## General Principles
+
+These principles apply across all patterns:
+
+1. **Always wait after acting.** Every `send`, `type`, `click`, or `resize` must be followed by a `wait` and then a `snapshot` or `assert`.
+
+2. **Use traps for cleanup.** Ensure sessions are destroyed even if the test fails partway through.
+
+3. **Use unique session names.** Avoid collisions between parallel tests with `SESSION="test-$$"`.
+
+4. **Prefer condition waits over hard waits.** `wait --text` and `wait --stable` are faster and more reliable than `wait 3000`.
+
+5. **Check process health when things go wrong.** If a snapshot shows unexpected content, run `status --json` and `logs --stderr` before debugging further.
+
+6. **Start with `--stable` after `open`.** The first render may take time, especially for apps that compile or load data.
