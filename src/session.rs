@@ -778,8 +778,9 @@ pub fn test_matrix(
         .map(|s| s.trim())
         .collect();
 
-    // Parse the test commands.
-    let test_commands: Vec<&str> = test.split(';').map(|s| s.trim()).collect();
+    // Parse the test commands. Support both ; and && as separators.
+    let test_str = test.replace("&&", ";");
+    let test_commands: Vec<&str> = test_str.split(';').map(|s| s.trim()).collect();
 
     // Build the full matrix.
     struct MatrixEntry<'a> {
@@ -880,8 +881,24 @@ pub fn test_matrix(
                 continue;
             }
 
-            // Execute the test command as a shell command, substituting the session name.
-            let expanded = test_cmd.replace("{session}", &session_name);
+            // Execute the test command. If it looks like an agent-terminal subcommand
+            // (starts with a known subcommand name), prefix with our binary path and
+            // the session flag. Otherwise run as-is through sh -c.
+            let at_subcommands = [
+                "open", "close", "list", "status", "exit-code", "logs",
+                "snapshot", "send", "type", "paste", "resize", "click",
+                "drag", "scroll-wheel", "wait", "assert", "find",
+                "screenshot", "signal", "clipboard", "scrollback", "perf",
+            ];
+            let first_word = test_cmd.split_whitespace().next().unwrap_or("");
+            let expanded = if at_subcommands.contains(&first_word) {
+                let self_bin = std::env::current_exe()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "agent-terminal".to_string());
+                format!("{} {} --session {}", self_bin, test_cmd, session_name)
+            } else {
+                test_cmd.replace("{session}", &session_name)
+            };
             let output = Command::new("sh")
                 .args(["-c", &expanded])
                 .output();
