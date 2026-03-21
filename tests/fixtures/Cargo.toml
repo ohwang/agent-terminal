@@ -1,0 +1,36 @@
+[package]
+name = "agent-terminal-fixtures"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+libc = "0.2"
+
+[[bin]]
+name = "fixture-echo"
+path = "src/bin/echo_app.rs"
+
+[[bin]]
+name = "fixture-counter"
+path = "src/bin/counter_app.rs"
+
+[[bin]]
+name = "fixture-color"
+path = "src/bin/color_app.rs"
+
+[[bin]]
+name = "fixture-mouse"
+path = "src/bin/mouse_app.rs"
+
+[[bin]]
+name = "fixture-crash"
+path = "src/bin/crash_app.rs"
+
+[[bin]]
+name = "fixture-slow"
+path = "src/bin/slow_app.rs"
+
+[[bin]]
+name = "fixture-resize"
+path = "src/bin/resize_app.rs"

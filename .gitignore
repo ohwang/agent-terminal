@@ -1,0 +1,9 @@
+/target
+/Cargo.lock
+*.swp
+*.swo
+*~
+.DS_Store
+/agent-terminal-matrix/
+/a11y-report/
+/tmp/
