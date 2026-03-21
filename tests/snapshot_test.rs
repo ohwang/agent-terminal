@@ -118,3 +118,33 @@ fn test_snapshot_diff() {
     // Should show changes
     assert!(diff.contains("Count: 1") || diff.contains("+") || diff.contains("-"));
 }
+
+#[test]
+fn test_snapshot_scrollback() {
+    let s = Session::new();
+    s.open_fixture_wait("slow", "Frame:");
+
+    // Wait for some frames to accumulate in scrollback.
+    // The slow fixture redraws the full screen every ~100ms, pushing
+    // previous content into scrollback.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+
+    // Capture with scrollback — should include more content than visible pane
+    let snap = s.run_ok(&["snapshot", "--scrollback", "50"]);
+    // Should contain the current frame
+    assert!(snap.contains("Frame:"), "Scrollback snapshot should contain Frame:");
+    // Plain snapshot mode includes the header
+    assert!(snap.contains("session:"), "Scrollback snapshot should have session header");
+
+    // Compare to a snapshot without scrollback
+    let plain = s.run_ok(&["snapshot"]);
+    // The scrollback version should have at least as many lines
+    let snap_lines = snap.lines().count();
+    let plain_lines = plain.lines().count();
+    assert!(
+        snap_lines >= plain_lines,
+        "Scrollback snapshot ({} lines) should have >= lines than plain ({} lines)",
+        snap_lines,
+        plain_lines
+    );
+}

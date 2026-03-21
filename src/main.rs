@@ -98,6 +98,7 @@ enum Commands {
     /// Send key sequences
     Send {
         /// Keys to send (e.g., "j", "Enter", "C-c")
+        #[arg(num_args = 1..)]
         keys: Vec<String>,
         /// Session name
         #[arg(long, default_value = "agent-terminal")]

@@ -211,6 +211,9 @@ pub fn open(
         tmux_cmd(&["new-session", "-d", "-s", session, &wrapped])?;
     }
 
+    // Enable mouse support so the pane forwards mouse events to apps.
+    let _ = tmux_cmd(&["set-option", "-t", session, "mouse", "on"]);
+
     // Apply initial size if requested (e.g., "120x40").
     if let Some(size_str) = size {
         let parts: Vec<&str> = size_str.split('x').collect();

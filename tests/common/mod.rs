@@ -15,7 +15,7 @@ impl Session {
         Session { name }
     }
 
-    fn bin_path() -> String {
+    pub fn bin_path() -> String {
         // Find the agent-terminal binary relative to the test binary
         let mut path = std::env::current_exe().unwrap();
         path.pop(); // remove test binary name

@@ -47,3 +47,24 @@ fn test_perf_start_stop() {
     let json: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
     assert!(json["fps"].is_number());
 }
+
+#[test]
+fn test_perf_fps_during() {
+    let s = Session::new();
+    s.open_fixture_wait("counter", "Count:");
+
+    // Measure FPS while sending keys via --during
+    // The --during flag takes an agent-terminal subcommand string
+    let out = s.run_ok(&["perf", "fps", "--during", "send j"]);
+    let json: serde_json::Value = serde_json::from_str(&out).expect("invalid JSON");
+
+    // Should produce valid FPS metrics with numeric fields
+    assert!(json["fps"].is_number(), "fps should be a number");
+    assert!(json["frame_count"].is_number(), "frame_count should be a number");
+    assert!(json["duration_ms"].is_number(), "duration_ms should be a number");
+    assert!(json["min_frame_ms"].is_number(), "min_frame_ms should be a number");
+    assert!(json["max_frame_ms"].is_number(), "max_frame_ms should be a number");
+    assert!(json["mean_frame_ms"].is_number(), "mean_frame_ms should be a number");
+    assert!(json["p95_frame_ms"].is_number(), "p95_frame_ms should be a number");
+    assert!(json["timeline"].is_array(), "timeline should be an array");
+}

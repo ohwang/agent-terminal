@@ -16,8 +16,8 @@ fn render(msg: &str) {
 /// Parse SGR mouse sequence: \x1b[<Btn;Col;Row[Mm]
 /// Returns Some((row, col)) on button press (trailing 'M'), None otherwise.
 fn parse_sgr_mouse(buf: &[u8], len: usize) -> Option<(u32, u32)> {
-    // Minimum: \x1b [ < N ; N ; N M = 10 bytes
-    if len < 10 {
+    // Minimum: \x1b [ < N ; N ; N M = 9 bytes
+    if len < 9 {
         return None;
     }
     // Must start with \x1b[<

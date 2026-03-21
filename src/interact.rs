@@ -105,13 +105,12 @@ pub fn click(row: u16, col: u16, session: &str, right: bool, double: bool) -> Re
     let press   = format!("\x1b[<{};{};{}M", btn, col, row);
     let release = format!("\x1b[<{};{};{}m", btn, col, row);
 
-    let click_seq = format!("{}{}", press, release);
-
-    if double {
-        let seq = format!("{}{}", click_seq, click_seq);
-        tmux_cmd(&["send-keys", "-t", &target, "-l", &seq])?;
-    } else {
-        tmux_cmd(&["send-keys", "-t", &target, "-l", &click_seq])?;
+    let count = if double { 2 } else { 1 };
+    for _ in 0..count {
+        // Send press and release as separate commands so the target
+        // application can read each escape sequence independently.
+        tmux_cmd(&["send-keys", "-t", &target, "-l", &press])?;
+        tmux_cmd(&["send-keys", "-t", &target, "-l", &release])?;
     }
 
     Ok(())
@@ -129,8 +128,10 @@ pub fn drag(r1: u16, c1: u16, r2: u16, c2: u16, session: &str) -> Result<(), Str
     let press   = format!("\x1b[<0;{};{}M", c1, r1);
     let release = format!("\x1b[<0;{};{}m", c2, r2);
 
-    let seq = format!("{}{}", press, release);
-    tmux_cmd(&["send-keys", "-t", &target, "-l", &seq])?;
+    // Send press and release as separate commands so the target
+    // application can read each escape sequence independently.
+    tmux_cmd(&["send-keys", "-t", &target, "-l", &press])?;
+    tmux_cmd(&["send-keys", "-t", &target, "-l", &release])?;
 
     Ok(())
 }
