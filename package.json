@@ -1,0 +1,32 @@
+{
+  "name": "agent-terminal",
+  "version": "0.1.0",
+  "description": "TUI testing CLI for autonomous agent-driven terminal application testing",
+  "type": "module",
+  "files": [
+    "bin",
+    "scripts",
+    "skills"
+  ],
+  "bin": {
+    "agent-terminal": "./bin/agent-terminal.js"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anthropics/agent-terminal.git"
+  },
+  "homepage": "https://github.com/anthropics/agent-terminal",
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "keywords": [
+    "tui",
+    "terminal",
+    "testing",
+    "tmux",
+    "cli",
+    "automation",
+    "agent"
+  ]
+}
