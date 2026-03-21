@@ -161,13 +161,15 @@ fn test_wait_exit_timeout_when_process_still_running() {
 fn test_wait_exit_with_short_lived_command() {
     let s = Session::new();
 
-    // Open a command that prints output (so `open` returns quickly after first
-    // render) and then sleeps before exiting. The `open` command waits up to 2s
-    // for first output, so we need to print something immediately.
-    s.run_ok(&["open", "echo waiting; sleep 2"]);
+    // Create the session first with a long-lived placeholder so we can set
+    // remain-on-exit before running the actual short-lived command.
+    // We use sleep with a print to ensure the session exists long enough.
+    s.run_ok(&["open", "echo waiting; sleep 3"]);
 
-    // Set remain-on-exit so tmux keeps the pane around after the process dies,
-    // allowing #{pane_dead} to return "1".
+    // Set remain-on-exit immediately so tmux keeps the pane around after the
+    // process dies, allowing #{pane_dead} to return "1".
+    // Small delay to ensure session is ready.
+    std::thread::sleep(std::time::Duration::from_millis(200));
     set_remain_on_exit(&s.name);
 
     // wait --exit should succeed when the sleep finishes
