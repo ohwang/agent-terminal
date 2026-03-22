@@ -1,0 +1,141 @@
+{
+  "skill_name": "agent-terminal",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have an app at tests/fixtures/target/debug/fixture-crash that intentionally crashes after about 500ms. Launch it, detect that it crashed, read stderr to find the crash message, and tell me what exit code it exited with.",
+      "expected_output": "Detects the crash, reads stderr showing 'CRASHING', reports exit code 42.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Used agent-terminal open to launch fixture-crash in a tmux session",
+          "type": "behavioral"
+        },
+        {
+          "text": "Detected the process died (via status, wait --exit, or similar)",
+          "type": "behavioral"
+        },
+        {
+          "text": "Read stderr logs and found the 'CRASHING' message (via agent-terminal logs --stderr)",
+          "type": "correctness"
+        },
+        {
+          "text": "Retrieved and reported exit code 42 (via agent-terminal exit-code)",
+          "type": "correctness"
+        },
+        {
+          "text": "Cleaned up the session (agent-terminal close)",
+          "type": "behavioral"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Launch the resize test app at tests/fixtures/target/debug/fixture-resize. Verify the initial terminal size is 80x24. Then resize the terminal to 40x12 and verify the app updates to show the new size.",
+      "expected_output": "Launches fixture-resize, confirms 80x24 initially, resizes to 40x12, confirms the app displays 'Size: 40x12'.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Used agent-terminal open to launch fixture-resize",
+          "type": "behavioral"
+        },
+        {
+          "text": "Verified initial size is 80x24 (via snapshot or assert showing 'Size: 80x24')",
+          "type": "correctness"
+        },
+        {
+          "text": "Used agent-terminal resize 40 12 to change the terminal size",
+          "type": "behavioral"
+        },
+        {
+          "text": "Waited after resize for the app to update (wait --stable or wait --text)",
+          "type": "behavioral"
+        },
+        {
+          "text": "Verified the app shows 'Size: 40x12' after resize (via snapshot or assert)",
+          "type": "correctness"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Launch the color test app at tests/fixtures/target/debug/fixture-color. Use agent-terminal's color/style inspection capabilities to verify that (1) there is red text on the screen, and (2) there is bold text on the screen. Then quit.",
+      "expected_output": "Launches fixture-color, uses --color snapshot or assert --style to verify red and bold styling, then quits.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Used agent-terminal open to launch fixture-color",
+          "type": "behavioral"
+        },
+        {
+          "text": "Used a color-aware observation method (snapshot --color, snapshot --json, assert --style, or assert --color)",
+          "type": "behavioral"
+        },
+        {
+          "text": "Verified red text exists on screen",
+          "type": "correctness"
+        },
+        {
+          "text": "Verified bold text exists on screen",
+          "type": "correctness"
+        },
+        {
+          "text": "Cleaned up the session",
+          "type": "behavioral"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Launch the slow app at tests/fixtures/target/debug/fixture-slow. It auto-increments a frame counter every 100ms. Use wait --regex to wait until the frame number reaches at least double digits (10 or higher), then take a snapshot to confirm. Quit after.",
+      "expected_output": "Launches fixture-slow, uses wait --regex with a pattern matching Frame: followed by 2+ digits, snapshots to confirm, quits.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Used agent-terminal open to launch fixture-slow",
+          "type": "behavioral"
+        },
+        {
+          "text": "Used wait --regex with a pattern that matches double-digit frame numbers",
+          "type": "behavioral"
+        },
+        {
+          "text": "Snapshot confirms a frame number >= 10 was reached",
+          "type": "correctness"
+        },
+        {
+          "text": "Quit the app and cleaned up the session",
+          "type": "behavioral"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Launch the echo app at tests/fixtures/target/debug/fixture-echo with the arguments 'hello world test'. Verify that the arguments appear on screen and that the app shows 'READY'. Then press q to quit, wait for the process to exit, and get the exit code.",
+      "expected_output": "Launches fixture-echo with args, verifies 'READY' and args on screen, quits with q, confirms exit via wait --exit, reports exit code 0.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Used agent-terminal open to launch fixture-echo with arguments 'hello world test'",
+          "type": "behavioral"
+        },
+        {
+          "text": "Verified 'READY' appears on screen (via snapshot, assert, or wait --text)",
+          "type": "correctness"
+        },
+        {
+          "text": "Verified the arguments 'hello world test' appear on screen",
+          "type": "correctness"
+        },
+        {
+          "text": "Sent q to quit and confirmed the process exited (wait --exit or status check)",
+          "type": "behavioral"
+        },
+        {
+          "text": "Retrieved and reported exit code 0",
+          "type": "correctness"
+        }
+      ]
+    }
+  ]
+}
