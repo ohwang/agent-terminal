@@ -4,6 +4,7 @@ mod interact;
 mod wait;
 mod annotate;
 mod perf;
+mod watch;
 
 use clap::{Parser, Subcommand};
 
@@ -352,6 +353,15 @@ enum Commands {
         /// Command to test
         command: String,
     },
+    /// Live dashboard for observing all agent-terminal sessions
+    Watch {
+        /// Poll interval in milliseconds
+        #[arg(long, default_value = "200")]
+        interval: u64,
+        /// Only show sessions matching this prefix
+        #[arg(long)]
+        filter: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -493,6 +503,9 @@ fn main() {
         }
         Commands::A11yCheck { command } => {
             session::a11y_check(&command)
+        }
+        Commands::Watch { interval, filter } => {
+            watch::run(interval, filter.as_deref())
         }
     };
 
