@@ -14,3 +14,9 @@ package-lock.json
 
 # Platform binaries (downloaded at install time, not checked in)
 bin/agent-terminal-*
+
+# Local workspace/scratch
+/agent-terminal-workspace/
+
+# Fixture build artifacts
+/tests/fixtures/target/
