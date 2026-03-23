@@ -1,4 +1,5 @@
 use std::fs;
+use ab_glyph::{Font as AbGlyphFont, FontVec, PxScale, ScaleFont, point};
 use crate::snapshot;
 
 /// Render a terminal screenshot as PNG or HTML.
@@ -197,7 +198,128 @@ fn ansi_line_to_html(line: &str, color_map: &AnsiColorMap, row: usize, cursor_x:
     result
 }
 
-/// Render terminal content as PNG using the image crate.
+/// A single visible character with its resolved colors.
+struct ColoredCell {
+    ch: char,
+    fg: (u8, u8, u8),
+    bg: Option<(u8, u8, u8)>,
+}
+
+/// Parse an ANSI line into colored cells, resolving all SGR sequences.
+fn parse_ansi_line_to_cells(line: &str, default_fg: (u8, u8, u8), style: &mut StyleState) -> Vec<ColoredCell> {
+    let mut cells = Vec::new();
+    let mut chars = line.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                let mut params = String::new();
+                while let Some(&c) = chars.peek() {
+                    if c.is_ascii_digit() || c == ';' {
+                        params.push(c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                if let Some(&cmd) = chars.peek() {
+                    chars.next();
+                    if cmd == 'm' {
+                        style.apply_sgr(&params);
+                    }
+                }
+            }
+        } else {
+            let (fg, bg) = if style.reverse {
+                (
+                    style.bg.unwrap_or(default_fg),
+                    Some(style.fg.unwrap_or(default_fg)),
+                )
+            } else {
+                (style.fg.unwrap_or(default_fg), style.bg)
+            };
+            cells.push(ColoredCell { ch, fg, bg });
+        }
+    }
+
+    cells
+}
+
+/// Load a monospace font from the system.
+fn load_font() -> Result<FontVec, String> {
+    let candidates: &[(&str, Option<u32>)] = &[
+        // macOS
+        ("/System/Library/Fonts/Menlo.ttc", Some(0)),
+        ("/System/Library/Fonts/Monaco.ttf", None),
+        ("/System/Library/Fonts/Supplemental/Courier New.ttf", None),
+        // Linux
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", None),
+        ("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", None),
+        ("/usr/share/fonts/TTF/DejaVuSansMono.ttf", None),
+        ("/usr/share/fonts/truetype/freefont/FreeMono.ttf", None),
+        // Windows
+        ("C:\\Windows\\Fonts\\consola.ttf", None),
+        ("C:\\Windows\\Fonts\\cour.ttf", None),
+    ];
+
+    for (path, index) in candidates {
+        if let Ok(data) = fs::read(path) {
+            let result = if let Some(idx) = index {
+                FontVec::try_from_vec_and_index(data, *idx)
+            } else {
+                FontVec::try_from_vec(data)
+            };
+            match result {
+                Ok(font) => return Ok(font),
+                Err(_) => continue,
+            }
+        }
+    }
+
+    Err("No monospace font found. Searched: Menlo (macOS), DejaVu Sans Mono (Linux), Consolas (Windows)".into())
+}
+
+/// Draw a single glyph onto the image with alpha blending.
+fn draw_glyph(
+    img: &mut image::RgbaImage,
+    font: &FontVec,
+    ch: char,
+    scale: PxScale,
+    x: f32,
+    baseline_y: f32,
+    color: (u8, u8, u8),
+) {
+    let glyph_id = font.glyph_id(ch);
+    let glyph = glyph_id.with_scale_and_position(scale, point(x, baseline_y));
+
+    if let Some(outlined) = font.outline_glyph(glyph) {
+        let (r, g, b) = color;
+        let bounds = outlined.px_bounds();
+        let bx = bounds.min.x as u32;
+        let by = bounds.min.y as u32;
+        let img_w = img.width();
+        let img_h = img.height();
+        outlined.draw(|rx, ry, coverage| {
+            let px = rx + bx;
+            let py = ry + by;
+            if px < img_w && py < img_h {
+                let alpha = (coverage * 255.0) as u16;
+                if alpha == 0 {
+                    return;
+                }
+                let bg = img.get_pixel(px, py);
+                let inv = 255 - alpha;
+                let blended_r = ((r as u16 * alpha + bg[0] as u16 * inv) / 255) as u8;
+                let blended_g = ((g as u16 * alpha + bg[1] as u16 * inv) / 255) as u8;
+                let blended_b = ((b as u16 * alpha + bg[2] as u16 * inv) / 255) as u8;
+                img.put_pixel(px, py, image::Rgba([blended_r, blended_g, blended_b, 255]));
+            }
+        });
+    }
+}
+
+/// Render terminal content as PNG using ab_glyph for real font rendering.
 fn render_png(
     ansi_content: &str,
     cols: u16,
@@ -208,10 +330,18 @@ fn render_png(
     theme: &str,
     output_path: &str,
 ) -> Result<(), String> {
-    let cell_width: u32 = 8;
-    let cell_height: u32 = 16;
+    let font = load_font()?;
+    let font_size = 16.0_f32;
+    let scale = PxScale::from(font_size);
+    let scaled = font.as_scaled(scale);
+
+    let cell_width = scaled.h_advance(font.glyph_id('M')).ceil() as u32;
+    let ascent = scaled.ascent();
+    let descent = -scaled.descent(); // descent is negative
+    let cell_height = (ascent + descent).ceil() as u32;
+
     let padding: u32 = 16;
-    let gutter: u32 = if annotate { 40 } else { 0 };
+    let gutter: u32 = if annotate { cell_width * 4 } else { 0 };
     let title_bar_height: u32 = 28;
 
     let lines: Vec<&str> = ansi_content.lines().collect();
@@ -226,7 +356,7 @@ fn render_png(
         (30u8, 30u8, 30u8)
     };
 
-    let (fg_r, fg_g, fg_b) = if theme == "light" {
+    let default_fg = if theme == "light" {
         (0u8, 0u8, 0u8)
     } else {
         (212u8, 212u8, 212u8)
@@ -245,44 +375,51 @@ fn render_png(
         }
     }
 
-    // Render text character by character using basic bitmap approach
-    // Since we can't easily embed fonts without complex setup, we'll render
-    // each character as a simple bitmap pattern
     let y_offset = title_bar_height + padding;
     let x_offset = padding + gutter;
+    let gutter_color = (100u8, 100u8, 100u8);
+
+    // Style state persists across lines (ANSI colors can span lines)
+    let mut style = StyleState::default();
 
     for (line_idx, line) in lines.iter().enumerate() {
         let y_pos = y_offset + (line_idx as u32 * cell_height);
+        let baseline_y = y_pos as f32 + ascent;
 
-        // Draw row number if annotating
+        // Draw row numbers in the gutter
         if annotate {
-            let num_str = format!("{:>3}│", line_idx + 1);
-            draw_simple_text(
-                &mut imgbuf,
-                &num_str,
-                padding,
-                y_pos,
-                cell_width,
-                cell_height,
-                [100, 100, 100, 255],
-            );
+            let num_str = format!("{:>3}|", line_idx + 1);
+            for (i, ch) in num_str.chars().enumerate() {
+                let gx = padding + (i as u32 * cell_width);
+                draw_glyph(&mut imgbuf, &font, ch, scale, gx as f32, baseline_y, gutter_color);
+            }
         }
 
-        // Strip ANSI and render plain text with coloring
-        let plain = strip_ansi(line);
-        let color = [fg_r, fg_g, fg_b, 255];
+        // Parse ANSI and render each cell with proper color
+        let cells = parse_ansi_line_to_cells(line, default_fg, &mut style);
 
-        draw_simple_text(
-            &mut imgbuf,
-            &plain,
-            x_offset,
-            y_pos,
-            cell_width,
-            cell_height,
-            color,
-        );
+        for (col_idx, cell) in cells.iter().enumerate() {
+            let cx = x_offset + (col_idx as u32 * cell_width);
+            let cy = y_pos;
 
-        // Draw cursor
+            // Draw cell background if set
+            if let Some((br, bg, bb)) = cell.bg {
+                for dy in 0..cell_height {
+                    for dx in 0..cell_width {
+                        if cx + dx < img_width && cy + dy < img_height {
+                            imgbuf.put_pixel(cx + dx, cy + dy, image::Rgba([br, bg, bb, 255]));
+                        }
+                    }
+                }
+            }
+
+            // Draw the character glyph
+            if cell.ch != ' ' {
+                draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg);
+            }
+        }
+
+        // Draw cursor (invert colors at cursor position)
         if line_idx == cursor_y as usize {
             let cx = x_offset + (cursor_x as u32 * cell_width);
             let cy = y_pos;
@@ -290,7 +427,6 @@ fn render_png(
                 for dx in 0..cell_width {
                     if cx + dx < img_width && cy + dy < img_height {
                         let pixel = imgbuf.get_pixel(cx + dx, cy + dy);
-                        // Invert colors for cursor
                         imgbuf.put_pixel(
                             cx + dx,
                             cy + dy,
@@ -309,106 +445,6 @@ fn render_png(
     Ok(())
 }
 
-/// Draw text as simple block characters (bitmap approximation).
-/// This is a simplified renderer - for production, you'd use ab_glyph with an embedded font.
-fn draw_simple_text(
-    img: &mut image::RgbaImage,
-    text: &str,
-    x: u32,
-    y: u32,
-    cell_w: u32,
-    _cell_h: u32,
-    color: [u8; 4],
-) {
-    for (i, ch) in text.chars().enumerate() {
-        if ch == ' ' || ch == '\t' {
-            continue;
-        }
-        let cx = x + (i as u32 * cell_w);
-        // Draw a simple representation of the character
-        // For a real implementation, we'd use ab_glyph to rasterize glyphs
-        // Here we draw a simple pattern that represents the character
-        let pattern = get_char_pattern(ch);
-        for (dy, row) in pattern.iter().enumerate() {
-            for (dx, &pixel) in row.iter().enumerate() {
-                if pixel > 0 {
-                    let px = cx + dx as u32;
-                    let py = y + dy as u32 + 2; // offset from top of cell
-                    if px < img.width() && py < img.height() {
-                        let alpha = (pixel as u16 * color[3] as u16 / 255) as u8;
-                        img.put_pixel(px, py, image::Rgba([color[0], color[1], color[2], alpha]));
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Get a simple 6x10 bitmap pattern for a character.
-/// Returns a 10-row by 6-col grid of alpha values (0 or 255).
-fn get_char_pattern(ch: char) -> Vec<Vec<u8>> {
-    // Simple 6x10 bitmap font for basic ASCII characters
-    // This is a minimal implementation - a real one would embed a proper font
-    let empty = vec![vec![0u8; 6]; 10];
-
-    // For characters we don't have patterns for, draw a filled rectangle
-    if !ch.is_ascii_graphic() {
-        return empty;
-    }
-
-    // Draw a simple filled block to represent any character
-    // In production, we'd use ab_glyph with an embedded monospace font
-    let mut pattern = vec![vec![0u8; 6]; 10];
-
-    // Simple block representation - sufficient for screenshot thumbnails
-    // Characters are represented as small filled areas
-    match ch {
-        '│' | '|' => {
-            for row in &mut pattern {
-                row[3] = 255;
-            }
-        }
-        '─' | '-' => {
-            pattern[5] = vec![255; 6];
-        }
-        _ => {
-            // Generic character: draw a small filled rectangle
-            for row in pattern.iter_mut().take(9).skip(1) {
-                for col in row.iter_mut().take(5).skip(1) {
-                    *col = 200;
-                }
-            }
-        }
-    }
-
-    pattern
-}
-
-/// Strip ANSI escape sequences from a string.
-fn strip_ansi(s: &str) -> String {
-    let mut result = String::new();
-    let mut chars = s.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' {
-            // Skip escape sequence
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                while let Some(&c) = chars.peek() {
-                    if c.is_ascii_alphabetic() {
-                        chars.next();
-                        break;
-                    }
-                    chars.next();
-                }
-            }
-        } else {
-            result.push(ch);
-        }
-    }
-
-    result
-}
 
 // --- Style tracking for HTML rendering ---
 
