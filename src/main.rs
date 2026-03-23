@@ -5,6 +5,8 @@ mod wait;
 mod annotate;
 mod perf;
 mod watch;
+mod record;
+mod web;
 
 use clap::{Parser, Subcommand};
 
@@ -362,6 +364,20 @@ enum Commands {
         #[arg(long)]
         filter: Option<String>,
     },
+    /// Record terminal sessions for later replay
+    Record {
+        #[command(subcommand)]
+        command: RecordCommands,
+    },
+    /// Launch web viewer for recorded sessions
+    Web {
+        /// Recordings directory
+        #[arg(long)]
+        dir: Option<String>,
+        /// Port to serve on
+        #[arg(long, default_value = "8080")]
+        port: u16,
+    },
 }
 
 #[derive(Subcommand)]
@@ -413,8 +429,128 @@ enum PerfCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum RecordCommands {
+    /// Start recording a session
+    Start {
+        /// Session name
+        #[arg(long, default_value = "agent-terminal")]
+        session: String,
+        /// Group name for organizing recordings
+        #[arg(long, default_value = "default")]
+        group: String,
+        /// Label for this recording (e.g., "before", "after")
+        #[arg(long, default_value = "")]
+        label: String,
+        /// Capture frames per second (default: 10)
+        #[arg(long)]
+        fps: Option<u32>,
+        /// Custom recordings directory
+        #[arg(long)]
+        dir: Option<String>,
+    },
+    /// Stop recording a session
+    Stop {
+        /// Session name
+        #[arg(long, default_value = "agent-terminal")]
+        session: String,
+    },
+    /// List all recordings
+    List {
+        /// Custom recordings directory
+        #[arg(long)]
+        dir: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Internal: background poller (hidden from help)
+    #[command(name = "__poll", hide = true)]
+    Poll {
+        /// Session name
+        #[arg(long)]
+        session: String,
+        /// Recording directory
+        #[arg(long)]
+        recording_dir: String,
+        /// Frames per second
+        #[arg(long, default_value = "10")]
+        fps: u32,
+    },
+}
+
+fn extract_command_info(cmd: &Commands) -> Option<(String, String, Vec<String>)> {
+    match cmd {
+        Commands::Send { keys, session, .. } => Some((
+            session.clone(),
+            "send".to_string(),
+            keys.clone(),
+        )),
+        Commands::Type { text, session, .. } => Some((
+            session.clone(),
+            "type".to_string(),
+            vec![text.clone()],
+        )),
+        Commands::Paste { text, session, .. } => Some((
+            session.clone(),
+            "paste".to_string(),
+            vec![text.clone()],
+        )),
+        Commands::Click { row, col, session, right, double, .. } => Some((
+            session.clone(),
+            "click".to_string(),
+            vec![format!("{},{}", row, col), format!("right={},double={}", right, double)],
+        )),
+        Commands::Drag { r1, c1, r2, c2, session, .. } => Some((
+            session.clone(),
+            "drag".to_string(),
+            vec![format!("{},{} -> {},{}", r1, c1, r2, c2)],
+        )),
+        Commands::Resize { cols, rows, session, .. } => Some((
+            session.clone(),
+            "resize".to_string(),
+            vec![format!("{}x{}", cols, rows)],
+        )),
+        Commands::ScrollWheel { direction, row, col, session, .. } => Some((
+            session.clone(),
+            "scroll".to_string(),
+            vec![direction.clone(), format!("{},{}", row, col)],
+        )),
+        Commands::Wait { session, text, text_gone, stable, cursor, regex, exit, .. } => {
+            let mut args = Vec::new();
+            if let Some(t) = text { args.push(format!("--text {}", t)); }
+            if let Some(t) = text_gone { args.push(format!("--text-gone {}", t)); }
+            if let Some(s) = stable { args.push(format!("--stable {}", s)); }
+            if let Some(c) = cursor { args.push(format!("--cursor {}", c)); }
+            if let Some(r) = regex { args.push(format!("--regex {}", r)); }
+            if *exit { args.push("--exit".to_string()); }
+            Some((session.clone(), "wait".to_string(), args))
+        }
+        Commands::Assert { session, text, no_text, .. } => {
+            let mut args = Vec::new();
+            if let Some(t) = text { args.push(format!("--text {}", t)); }
+            if let Some(t) = no_text { args.push(format!("--no-text {}", t)); }
+            Some((session.clone(), "assert".to_string(), args))
+        }
+        Commands::Signal { signal, session, .. } => Some((
+            session.clone(),
+            "signal".to_string(),
+            vec![signal.clone()],
+        )),
+        Commands::Find { pattern, session, .. } => Some((
+            session.clone(),
+            "find".to_string(),
+            vec![pattern.clone()],
+        )),
+        _ => None,
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
+
+    // Extract command info for action logging before the match moves cli.command
+    let action_info = extract_command_info(&cli.command);
 
     let result = match cli.command {
         Commands::Open { command, session, pane, envs, size, shell, no_stderr } => {
@@ -507,7 +643,29 @@ fn main() {
         Commands::Watch { interval, filter } => {
             watch::run(interval, filter.as_deref())
         }
+        Commands::Record { command } => {
+            match command {
+                RecordCommands::Start { session, group, label, fps, dir } => {
+                    record::start(&session, &group, &label, fps, dir.as_deref())
+                }
+                RecordCommands::Stop { session } => record::stop(&session),
+                RecordCommands::List { dir, json } => record::list(dir.as_deref(), json),
+                RecordCommands::Poll { session, recording_dir, fps } => {
+                    record::poll(&session, &recording_dir, fps)
+                }
+            }
+        }
+        Commands::Web { dir, port } => {
+            web::serve(dir.as_deref(), port)
+        }
     };
+
+    // Log action to recording if one is active for this session
+    if result.is_ok() {
+        if let Some((session, cmd_name, args)) = action_info {
+            record::log_action(&session, &cmd_name, &args);
+        }
+    }
 
     if let Err(e) = result {
         eprintln!("ERROR: {}", e);
