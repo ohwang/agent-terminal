@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>player - agent-terminal</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="player-layout">
+        <div class="player-main">
+            <div class="player-header">
+                <a href="/" class="back">&larr;</a>
+                <div class="player-info">
+                    <h2 id="player-title">Loading...</h2>
+                    <div class="meta" id="player-meta"></div>
+                </div>
+            </div>
+            <div class="terminal-viewport">
+                <div class="terminal" id="terminal"></div>
+            </div>
+            <div class="controls">
+                <button id="btn-play" onclick="togglePlay()">Play</button>
+                <div class="timeline" id="timeline" onclick="seekTimeline(event)">
+                    <div class="timeline-progress" id="timeline-progress"></div>
+                </div>
+                <span class="time" id="time-display">0:00 / 0:00</span>
+                <select class="speed-select" id="speed" onchange="setSpeed(this.value)">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">4x</option>
+                </select>
+                <div class="mode-toggle">
+                    <button id="mode-visual" class="active" onclick="setMode('visual')">Visual</button>
+                    <button id="mode-text" onclick="setMode('text')">Text</button>
+                </div>
+            </div>
+        </div>
+        <div class="player-sidebar">
+            <div class="sidebar-header">Agent Actions</div>
+            <div class="actions-list" id="actions-list">
+                <div style="padding:16px;color:var(--text-dim)">No actions recorded</div>
+            </div>
+        </div>
+    </div>
+    <script src="/player.js"></script>
+</body>
+</html>

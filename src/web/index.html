@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>agent-terminal recordings</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>agent-terminal recordings</h1>
+                <div class="subtitle">Session recordings for review</div>
+            </div>
+        </div>
+        <div id="recordings"></div>
+    </div>
+    <script>
+    (async function() {
+        const res = await fetch('/api/recordings');
+        const recordings = await res.json();
+
+        const container = document.getElementById('recordings');
+
+        if (recordings.length === 0) {
+            container.innerHTML = '<div class="empty">No recordings found.<br>Start recording with: <code>agent-terminal record start --session &lt;name&gt;</code></div>';
+            return;
+        }
+
+        // Group by group name
+        const groups = {};
+        for (const rec of recordings) {
+            const g = rec.group || 'default';
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(rec);
+        }
+
+        let html = '';
+        for (const [group, recs] of Object.entries(groups)) {
+            html += `<div class="group">`;
+            html += `<div class="group-title">${esc(group)}</div>`;
+            for (const rec of recs) {
+                const label = rec.label ? `<span class="card-label">${esc(rec.label)}</span>` : '';
+                const date = new Date(rec.started_at).toLocaleString();
+                const duration = rec.duration_ms ? `${(rec.duration_ms / 1000).toFixed(1)}s` : 'recording...';
+                const frames = rec.frame_count !== undefined ? `${rec.frame_count} frames` : '';
+                const dirName = rec._dir_name || '';
+                html += `<div class="recording-card" onclick="openPlayer('${esc(group)}', '${esc(dirName)}')">`;
+                html += `  ${label}`;
+                html += `  <span class="card-session">${esc(rec.session)}</span>`;
+                html += `  <span class="card-meta">${esc(date)} &middot; ${rec.cols}x${rec.rows}</span>`;
+                html += `  <span class="card-stats">${esc(duration)}<br>${esc(frames)}</span>`;
+                html += `</div>`;
+            }
+            html += `</div>`;
+        }
+        container.innerHTML = html;
+    })();
+
+    function openPlayer(group, dirName) {
+        window.location.href = `/player?group=${encodeURIComponent(group)}&name=${encodeURIComponent(dirName)}`;
+    }
+
+    function esc(s) {
+        if (s === undefined || s === null) return '';
+        const d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
+    </script>
+</body>
+</html>
