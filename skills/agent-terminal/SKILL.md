@@ -1,6 +1,6 @@
 ---
 name: agent-terminal
-description: TUI testing CLI for AI agents. Use when you need to launch, observe, interact with, or test any terminal application — full-screen TUIs (ratatui, bubbletea, textual, ink), REPLs (python, node), curses apps (htop, vim), or CLI tools with interactive prompts.
+description: TUI testing CLI for AI agents. Use when you need to launch, observe, interact with, or test any terminal application — full-screen TUIs (ratatui, bubbletea, textual, ink), REPLs (python, node), curses apps (htop, vim), or CLI tools with interactive prompts. Can record sessions for later replay and human review via a built-in web viewer.
 allowed-tools: Bash(agent-terminal:*), Bash(agent-terminal *)
 ---
 
@@ -161,6 +161,20 @@ Default timeout: 10000ms. Default poll interval: 50ms.
 | `perf fps --during-batch [--session s]` | Measure FPS during JSON batch from stdin |
 | `perf fps --duration <ms> [--session s]` | Passively observe FPS for N ms |
 | `perf latency [--session s] [--key k] [--samples N] [--json]` | Measure keystroke-to-render latency |
+
+### Recording & Replay
+
+| Command | Description |
+|---------|-------------|
+| `record start [--session s] [--group g] [--label l] [--fps N] [--dir path]` | Start recording a session (background poller) |
+| `record stop [--session s]` | Stop recording, finalize metadata |
+| `record list [--dir path] [--json]` | List all recordings, grouped by group name |
+| `web [--dir path] [--port 8080]` | Launch web viewer for browsing and replaying recordings |
+
+Recordings are saved to `~/.agent-terminal/recordings/{group}/` by default. Each recording produces three files:
+- `recording.cast` -- asciinema v2 format (visual replay with colors)
+- `frames.jsonl` -- plain-text snapshots per frame (AI-readable)
+- `actions.jsonl` -- agent-terminal commands logged during recording
 
 ### Environment & Testing
 
@@ -449,6 +463,76 @@ Failure snapshots saved to: ./agent-terminal-matrix/
 Use `{session}` in test commands -- it gets replaced with the per-combination session name.
 
 **When to use test-matrix**: after you have a working app and want to verify it handles edge cases. Not for initial development.
+
+---
+
+## Recording Sessions for Review
+
+Use recording to capture before/after sessions for human review. This is especially useful when making many autonomous changes -- humans can review each recording to verify improvements.
+
+### Before/After Pattern
+
+```bash
+# 1. Open the app and start recording the "before" state
+agent-terminal open "./my-app" --session app
+agent-terminal wait --stable 500 --session app
+agent-terminal record start --session app --group "fix-42" --label "before"
+
+# 2. Interact to demonstrate the current (buggy) behavior
+agent-terminal send "j" --session app
+agent-terminal wait --stable 200 --session app
+agent-terminal snapshot --session app   # observe the bug
+
+# 3. Stop recording
+agent-terminal record stop --session app
+agent-terminal close --session app
+
+# ... make code changes ...
+
+# 4. Record the "after" state
+agent-terminal open "./my-app" --session app
+agent-terminal wait --stable 500 --session app
+agent-terminal record start --session app --group "fix-42" --label "after"
+
+# 5. Demonstrate the fix
+agent-terminal send "j" --session app
+agent-terminal wait --stable 200 --session app
+agent-terminal snapshot --session app   # observe the fix
+
+# 6. Stop and clean up
+agent-terminal record stop --session app
+agent-terminal close --session app
+```
+
+### Key Points
+
+- **`--group`** ties related recordings together (e.g., all recordings for one bug fix)
+- **`--label`** distinguishes recordings within a group (e.g., "before", "after", "attempt-2")
+- **Actions are auto-logged.** Every `send`, `type`, `click`, `wait`, etc. during recording is captured with timestamps
+- **Frames are deduplicated.** Only screen changes are recorded, so idle screens don't bloat the file
+- **Three output formats**: `.cast` (visual replay for humans), `frames.jsonl` (plain text for AI), `actions.jsonl` (what the agent did)
+
+### Reviewing Recordings
+
+```bash
+# List all recordings
+agent-terminal record list
+
+# Launch the web viewer
+agent-terminal web --port 8080
+# Opens a dashboard at http://localhost:8080 showing all recordings
+# grouped by group name, with a player that shows terminal replay
+# alongside a timeline of agent actions
+```
+
+### Custom Recording Directory
+
+```bash
+# Save recordings to a project-specific location
+agent-terminal record start --session app --group "feature" --dir ./recordings
+agent-terminal record list --dir ./recordings
+agent-terminal web --dir ./recordings
+```
 
 ---
 

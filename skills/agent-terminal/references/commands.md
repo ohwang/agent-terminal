@@ -982,3 +982,176 @@ agent-terminal a11y-check "./my-app"
 # Checking resize to 40x10 ... PASS
 # Accessibility: 3/3 passed
 ```
+
+---
+
+## Recording & Replay
+
+### `record start`
+
+Start recording a session. Spawns a background poller that captures terminal frames at the configured FPS, deduplicating identical frames.
+
+**Syntax:**
+
+```
+agent-terminal record start [flags]
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to record |
+| `--group` | string | `default` | Group name for organizing related recordings (e.g., a bug fix ID) |
+| `--label` | string | _(empty)_ | Label within the group (e.g., "before", "after") |
+| `--fps` | integer | `10` | Capture frames per second |
+| `--dir` | string | `~/.agent-terminal/recordings` | Custom recordings directory |
+
+**What gets recorded:**
+
+- `recording.cast` -- asciinema v2 format file for visual replay (with ANSI colors)
+- `frames.jsonl` -- plain-text snapshots per frame (one JSON object per line, AI-readable)
+- `actions.jsonl` -- every `send`, `type`, `click`, `wait`, `assert`, etc. targeting this session is auto-logged with timestamps
+- `meta.json` -- recording metadata (session, group, label, timestamps, terminal size, frame count, duration)
+
+**Examples:**
+
+```bash
+# Basic recording
+agent-terminal record start --session my-app
+
+# Before/after pattern with group and label
+agent-terminal record start --session my-app --group "fix-login-bug" --label "before"
+
+# Higher FPS for fast animations
+agent-terminal record start --session my-app --fps 30
+
+# Custom output directory
+agent-terminal record start --session my-app --dir ./test-recordings
+```
+
+---
+
+### `record stop`
+
+Stop an active recording. Kills the background poller, updates metadata with final frame count and duration.
+
+**Syntax:**
+
+```
+agent-terminal record stop [flags]
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--session` | string | `agent-terminal` | Session to stop recording |
+
+**Example:**
+
+```bash
+agent-terminal record stop --session my-app
+# Recording stopped for session 'my-app': 15 frames, 8200ms
+```
+
+---
+
+### `record list`
+
+List all recordings, grouped by group name.
+
+**Syntax:**
+
+```
+agent-terminal record list [flags]
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--dir` | string | `~/.agent-terminal/recordings` | Custom recordings directory |
+| `--json` | bool | `false` | Output as JSON array |
+
+**Examples:**
+
+```bash
+agent-terminal record list
+# Group: fix-login-bug
+#   2026-03-23T14:39:03+08:00 session=my-app [after] (80x24) 15 frames, 8200ms
+#   2026-03-23T14:38:04+08:00 session=my-app [before] (80x24) 8 frames, 5100ms
+
+agent-terminal record list --json
+# [{"session":"my-app","group":"fix-login-bug","label":"after", ...}, ...]
+```
+
+---
+
+### `web`
+
+Launch a web viewer for browsing and replaying recordings. Opens an HTTP server with an index page (grouped recordings) and a player page (terminal replay with action sidebar).
+
+**Syntax:**
+
+```
+agent-terminal web [flags]
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--dir` | string | `~/.agent-terminal/recordings` | Recordings directory to serve |
+| `--port` | integer | `8080` | HTTP port |
+
+**Features:**
+
+- **Index page**: recordings grouped by group name, showing session, label, timestamp, terminal size, frame count, duration
+- **Player page**: terminal viewport with ANSI color rendering, play/pause, timeline scrubber, speed control (0.5x/1x/2x/4x), Visual/Text mode toggle
+- **Action sidebar**: agent actions displayed alongside playback, highlighted in sync with the timeline. Click an action to jump to that point in time.
+- **Keyboard shortcuts**: Space (play/pause), Left/Right arrows (seek 1s)
+- **Single binary**: all web assets are embedded in the agent-terminal binary
+
+**Example:**
+
+```bash
+agent-terminal web --port 9000
+# Web viewer running at http://localhost:9000
+# Recordings dir: ~/.agent-terminal/recordings
+# Press Ctrl+C to stop
+```
+
+---
+
+### Recording Storage Format
+
+Recordings are stored as directories:
+
+```
+{recordings_dir}/{group}/{timestamp}_{session}_{label}/
+  meta.json          # Recording metadata
+  recording.cast     # Asciinema v2 format
+  frames.jsonl       # Plain-text frames (AI-readable)
+  actions.jsonl      # Agent actions log
+```
+
+**`frames.jsonl`** -- each line is a JSON object:
+
+```json
+{"timestamp_ms": 150.5, "text": "Count: 1\n[j] +1  [k] -1  [q] quit\n...", "cols": 80, "rows": 24, "cursor_row": 2, "cursor_col": 0}
+```
+
+**`actions.jsonl`** -- each line is a JSON object:
+
+```json
+{"timestamp_ms": 2500.0, "command": "send", "args": ["j"]}
+{"timestamp_ms": 2700.0, "command": "wait", "args": ["--text Count: 1"]}
+```
+
+**`recording.cast`** -- asciinema v2 format:
+
+```json
+{"version": 2, "width": 80, "height": 24, "timestamp": 1774247884}
+[0.150, "o", "\u001b[2J\u001b[H...full ANSI screen content..."]
+```
