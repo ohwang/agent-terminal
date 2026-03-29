@@ -27,7 +27,7 @@ struct RecordingMeta {
     duration_ms: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct FrameEntry {
     timestamp_ms: f64,
     text: String,
@@ -257,6 +257,8 @@ pub fn stop(session: &str) -> Result<(), String> {
         }
     }
 
+    println!("Recording dir: {}", rec_dir.display());
+
     // Remove state marker
     let _ = fs::remove_file(&marker);
 
@@ -443,6 +445,180 @@ pub fn list(dir: Option<&str>, json: bool) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// View a recording as a chronological text stream.
+/// Default mode shows key frames (before/after each action + final frame).
+/// --all-frames shows every frame interleaved with actions.
+pub fn view(dir: &str, all_frames: bool, json: bool) -> Result<(), String> {
+    let rec_dir = PathBuf::from(dir);
+    if !rec_dir.exists() {
+        return Err(format!("Recording directory not found: {}", dir));
+    }
+
+    // Read metadata
+    let meta_path = rec_dir.join("meta.json");
+    let meta: Option<RecordingMeta> = fs::read_to_string(&meta_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+
+    // Read frames
+    let frames_path = rec_dir.join("frames.jsonl");
+    let frames: Vec<FrameEntry> = fs::read_to_string(&frames_path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+
+    // Read actions
+    let actions_path = rec_dir.join("actions.jsonl");
+    let actions: Vec<ActionEntry> = fs::read_to_string(&actions_path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
+
+    // Select which frame indices to include
+    let key_frame_indices: std::collections::BTreeSet<usize> = if all_frames {
+        (0..frames.len()).collect()
+    } else {
+        select_key_frames(&frames, &actions)
+    };
+
+    // Build unified timeline sorted by timestamp
+    #[derive(PartialEq)]
+    enum EventKind {
+        Frame(usize),
+        Action(usize),
+    }
+    let mut timeline: Vec<(f64, EventKind)> = Vec::new();
+    for (i, f) in frames.iter().enumerate() {
+        if key_frame_indices.contains(&i) {
+            timeline.push((f.timestamp_ms, EventKind::Frame(i)));
+        }
+    }
+    for (i, a) in actions.iter().enumerate() {
+        timeline.push((a.timestamp_ms, EventKind::Action(i)));
+    }
+    // Stable sort: preserve frame-before-action ordering for same timestamp
+    timeline.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    if json {
+        // JSON output
+        let mut events: Vec<serde_json::Value> = Vec::new();
+        for (_, kind) in &timeline {
+            match kind {
+                EventKind::Frame(i) => {
+                    let f = &frames[*i];
+                    events.push(serde_json::json!({
+                        "type": "frame",
+                        "timestamp_ms": f.timestamp_ms,
+                        "text": f.text,
+                        "cols": f.cols,
+                        "rows": f.rows,
+                        "cursor_row": f.cursor_row,
+                        "cursor_col": f.cursor_col,
+                    }));
+                }
+                EventKind::Action(i) => {
+                    let a = &actions[*i];
+                    events.push(serde_json::json!({
+                        "type": "action",
+                        "timestamp_ms": a.timestamp_ms,
+                        "command": a.command,
+                        "args": a.args,
+                    }));
+                }
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&events).unwrap());
+    } else {
+        // Text output
+        if let Some(ref m) = meta {
+            println!(
+                "=== Recording: session={}, group={}, label={} ===",
+                m.session,
+                m.group,
+                if m.label.is_empty() { "<none>" } else { &m.label }
+            );
+            println!(
+                "=== {}x{}, {}ms, {} frames, {} actions ===",
+                m.cols,
+                m.rows,
+                m.duration_ms,
+                frames.len(),
+                actions.len()
+            );
+            if !all_frames {
+                println!(
+                    "=== Showing {} key frames (use --all-frames for full timeline) ===",
+                    key_frame_indices.len()
+                );
+            }
+            println!();
+        }
+
+        for (_, kind) in &timeline {
+            match kind {
+                EventKind::Frame(i) => {
+                    let f = &frames[*i];
+                    println!("--- Frame @ {}ms ({}x{}) ---", f.timestamp_ms as u64, f.cols, f.rows);
+                    println!("{}", f.text);
+                    println!();
+                }
+                EventKind::Action(i) => {
+                    let a = &actions[*i];
+                    println!(
+                        ">>> Action @ {}ms: {} {:?}",
+                        a.timestamp_ms as u64, a.command, a.args
+                    );
+                    println!();
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn select_key_frames(
+    frames: &[FrameEntry],
+    actions: &[ActionEntry],
+) -> std::collections::BTreeSet<usize> {
+    let mut key_indices = std::collections::BTreeSet::new();
+
+    // Always include the final frame
+    if !frames.is_empty() {
+        key_indices.insert(frames.len() - 1);
+    }
+
+    // If no actions, also include the first frame
+    if actions.is_empty() {
+        if !frames.is_empty() {
+            key_indices.insert(0);
+        }
+        return key_indices;
+    }
+
+    for action in actions {
+        let t = action.timestamp_ms;
+
+        // Frame immediately before (or at) this action:
+        // partition_point returns the first index where timestamp_ms > t
+        let before_idx = frames.partition_point(|f| f.timestamp_ms <= t);
+        if before_idx > 0 {
+            key_indices.insert(before_idx - 1);
+        }
+
+        // Frame immediately after this action
+        if before_idx < frames.len() {
+            key_indices.insert(before_idx);
+        }
+    }
+
+    key_indices
 }
 
 /// Log an action to the active recording for a session.

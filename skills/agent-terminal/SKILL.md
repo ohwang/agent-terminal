@@ -169,6 +169,7 @@ Default timeout: 10000ms. Default poll interval: 50ms.
 | `record start [--session s] [--group g] [--label l] [--fps N] [--dir path]` | Start recording a session (background poller) |
 | `record stop [--session s]` | Stop recording, finalize metadata |
 | `record list [--dir path] [--json]` | List all recordings, grouped by group name |
+| `record view --dir path [--all-frames] [--json]` | View recording as chronological text stream |
 | `web [--dir path] [--port 8080]` | Launch web viewer for browsing and replaying recordings |
 
 Recordings are saved to `~/.agent-terminal/recordings/{group}/` by default. Each recording produces three files:
@@ -524,6 +525,29 @@ agent-terminal web --port 8080
 # grouped by group name, with a player that shows terminal replay
 # alongside a timeline of agent actions
 ```
+
+### AI Review of Recordings
+
+Use `record view` to review a recording directly in the terminal. The `record stop` command prints the recording directory path — pass it to `record view`:
+
+```bash
+# Stop recording — note the "Recording dir:" path in the output
+agent-terminal record stop --session app
+# Output:
+#   Recording stopped for session 'app': 25 frames, 5123ms
+#   Recording dir: /home/user/.agent-terminal/recordings/fix-42/20260324_143022_app_before
+
+# View key frames (frame before each action, frame after, final frame)
+agent-terminal record view --dir /home/user/.agent-terminal/recordings/fix-42/20260324_143022_app_before
+
+# View all frames with actions interleaved chronologically
+agent-terminal record view --dir /path/to/recording --all-frames
+
+# Get structured JSON output
+agent-terminal record view --dir /path/to/recording --json
+```
+
+The default mode shows only **key frames**: the screen state immediately before each action, immediately after, and the final frame. This gives a compact action-reaction view without token-heavy intermediate frames. Use `--all-frames` when you need the complete timeline (e.g., to see animations or streaming output between actions).
 
 ### Custom Recording Directory
 

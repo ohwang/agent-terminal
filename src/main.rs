@@ -464,6 +464,18 @@ enum RecordCommands {
         #[arg(long)]
         json: bool,
     },
+    /// View a recording as a chronological text stream
+    View {
+        /// Recording directory path
+        #[arg(long)]
+        dir: String,
+        /// Show all frames (not just key frames around actions)
+        #[arg(long)]
+        all_frames: bool,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Internal: background poller (hidden from help)
     #[command(name = "__poll", hide = true)]
     Poll {
@@ -650,6 +662,7 @@ fn main() {
                 }
                 RecordCommands::Stop { session } => record::stop(&session),
                 RecordCommands::List { dir, json } => record::list(dir.as_deref(), json),
+                RecordCommands::View { dir, all_frames, json } => record::view(&dir, all_frames, json),
                 RecordCommands::Poll { session, recording_dir, fps } => {
                     record::poll(&session, &recording_dir, fps)
                 }
