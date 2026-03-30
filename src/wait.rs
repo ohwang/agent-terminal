@@ -129,10 +129,26 @@ pub fn wait_stable_only(stable_ms: u64, session: &str) -> Result<(), String> {
         None,
         None,
         false,
+        false,
         session,
         10_000,
         50,
     )
+}
+
+/// Structured timeout error for JSON output.
+#[derive(serde::Serialize)]
+struct WaitTimeoutError {
+    error: String,
+    condition: String,
+    elapsed_ms: u64,
+    timeout_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_stable_duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    change_count: Option<u64>,
+    last_snapshot: String,
+    session: String,
 }
 
 /// Poll-based wait system. Exactly one condition should be active.
@@ -148,6 +164,7 @@ pub fn wait(
     cursor: Option<&str>,
     regex: Option<&str>,
     exit: bool,
+    json: bool,
     session: &str,
     timeout: u64,
     interval: u64,
@@ -166,6 +183,7 @@ pub fn wait(
             timeout,
             interval,
             &format!("--text \"{}\"", target_text),
+            json,
             |snapshot| {
                 if snapshot.contains(target_text) {
                     Some(Ok(()))
@@ -184,6 +202,7 @@ pub fn wait(
             timeout,
             interval,
             &format!("--text-any {:?}", text_any),
+            json,
             |snapshot| {
                 for t in &text_any_owned {
                     if snapshot.contains(t.as_str()) {
@@ -202,6 +221,7 @@ pub fn wait(
             timeout,
             interval,
             &format!("--text-gone \"{}\"", gone_text),
+            json,
             |snapshot| {
                 if !snapshot.contains(gone_text) {
                     Some(Ok(()))
@@ -216,7 +236,9 @@ pub fn wait(
     if let Some(stable_ms) = stable {
         let mut last_snapshot = String::new();
         let mut last_change = Instant::now();
-        let deadline = Instant::now() + Duration::from_millis(timeout);
+        let mut change_count: u64 = 0;
+        let start = Instant::now();
+        let deadline = start + Duration::from_millis(timeout);
 
         loop {
             let snapshot = capture_plain(session)?;
@@ -224,6 +246,7 @@ pub fn wait(
             if snapshot != last_snapshot {
                 last_snapshot = snapshot;
                 last_change = Instant::now();
+                change_count += 1;
             }
 
             let stable_duration = Instant::now().duration_since(last_change).as_millis() as u64;
@@ -234,6 +257,20 @@ pub fn wait(
             }
 
             if Instant::now() >= deadline {
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                if json {
+                    let err = WaitTimeoutError {
+                        error: "timeout".to_string(),
+                        condition: format!("--stable {}", stable_ms),
+                        elapsed_ms,
+                        timeout_ms: timeout,
+                        last_stable_duration_ms: Some(stable_duration),
+                        change_count: Some(change_count),
+                        last_snapshot: last_snapshot.clone(),
+                        session: session.to_string(),
+                    };
+                    println!("{}", serde_json::to_string_pretty(&err).unwrap());
+                }
                 return Err(format!(
                     "wait --stable {} timed out after {}ms\n\nSession: {}\nLast snapshot:\n{}Hint: Screen kept changing. Last stable for {}ms, needed {}ms.",
                     stable_ms,
@@ -267,7 +304,8 @@ pub fn wait(
             .parse()
             .map_err(|_| format!("Invalid cursor col '{}'", parts[1]))?;
 
-        let deadline = Instant::now() + Duration::from_millis(timeout);
+        let start = Instant::now();
+        let deadline = start + Duration::from_millis(timeout);
 
         loop {
             let (row, col) = get_cursor_position(session)?;
@@ -279,6 +317,19 @@ pub fn wait(
 
             if Instant::now() >= deadline {
                 let last_snapshot = capture_plain(session).unwrap_or_default();
+                if json {
+                    let err = WaitTimeoutError {
+                        error: "timeout".to_string(),
+                        condition: format!("--cursor \"{},{}\"", target_row, target_col),
+                        elapsed_ms: start.elapsed().as_millis() as u64,
+                        timeout_ms: timeout,
+                        last_stable_duration_ms: None,
+                        change_count: None,
+                        last_snapshot: last_snapshot.clone(),
+                        session: session.to_string(),
+                    };
+                    println!("{}", serde_json::to_string_pretty(&err).unwrap());
+                }
                 return Err(format!(
                     "wait --cursor \"{},{}\" timed out after {}ms\n\nSession: {}\nCursor at: {},{}\nLast snapshot:\n{}Hint: Cursor is at row {}, col {} — expected row {}, col {}.",
                     target_row, target_col, timeout,
@@ -302,6 +353,7 @@ pub fn wait(
             timeout,
             interval,
             &format!("--regex \"{}\"", pattern),
+            json,
             |snapshot| {
                 if re.is_match(snapshot) {
                     Some(Ok(()))
@@ -314,7 +366,8 @@ pub fn wait(
 
     // 7. Wait for process exit
     if exit {
-        let deadline = Instant::now() + Duration::from_millis(timeout);
+        let start = Instant::now();
+        let deadline = start + Duration::from_millis(timeout);
 
         loop {
             // Check if the pane's process is still alive by querying tmux.
@@ -337,6 +390,20 @@ pub fn wait(
             }
 
             if Instant::now() >= deadline {
+                if json {
+                    let last_snapshot = capture_plain(session).unwrap_or_default();
+                    let err = WaitTimeoutError {
+                        error: "timeout".to_string(),
+                        condition: "--exit".to_string(),
+                        elapsed_ms: start.elapsed().as_millis() as u64,
+                        timeout_ms: timeout,
+                        last_stable_duration_ms: None,
+                        change_count: None,
+                        last_snapshot,
+                        session: session.to_string(),
+                    };
+                    println!("{}", serde_json::to_string_pretty(&err).unwrap());
+                }
                 return Err(format!(
                     "wait --exit timed out after {}ms — process is still running\n\nSession: {}",
                     timeout,
@@ -362,12 +429,14 @@ fn wait_poll<F>(
     timeout: u64,
     interval: u64,
     condition_desc: &str,
+    json: bool,
     check: F,
 ) -> Result<(), String>
 where
     F: Fn(&str) -> Option<Result<(), String>>,
 {
-    let deadline = Instant::now() + Duration::from_millis(timeout);
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(timeout);
 
     loop {
         let snapshot = capture_plain(session)?;
@@ -382,6 +451,20 @@ where
         }
 
         if Instant::now() >= deadline {
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+            if json {
+                let err = WaitTimeoutError {
+                    error: "timeout".to_string(),
+                    condition: condition_desc.to_string(),
+                    elapsed_ms,
+                    timeout_ms: timeout,
+                    last_stable_duration_ms: None,
+                    change_count: None,
+                    last_snapshot: snapshot.clone(),
+                    session: session.to_string(),
+                };
+                println!("{}", serde_json::to_string_pretty(&err).unwrap());
+            }
             return Err(format!(
                 "wait {} timed out after {}ms\n\nSession: {}\nLast snapshot:\n{}Hint: Condition was never satisfied within the timeout period.",
                 condition_desc,

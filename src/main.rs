@@ -257,6 +257,9 @@ enum Commands {
         /// Poll interval in ms (default: 50)
         #[arg(long, default_value = "50")]
         interval: u64,
+        /// Output timeout errors as structured JSON
+        #[arg(long)]
+        json: bool,
         /// Save text snapshot to file after wait (or print to stdout if no path given)
         #[arg(long, num_args = 0..=1, default_missing_value = "")]
         capture: Option<String>,
@@ -835,6 +838,7 @@ fn main() {
             session,
             timeout,
             interval,
+            json,
             capture,
             screenshot,
         } => (|| {
@@ -847,6 +851,7 @@ fn main() {
                 cursor.as_deref(),
                 regex.as_deref(),
                 exit,
+                json,
                 &session,
                 timeout,
                 interval,
