@@ -158,6 +158,23 @@ fn test_man_page_alternate_screen() {
 fn test_git_log_pager() {
     let s = Session::new();
 
+    // Create a temporary git repo with known history so the test is self-contained
+    let tmp_repo = format!("/tmp/agent-terminal-git-test-{}", std::process::id());
+    std::process::Command::new("bash")
+        .args([
+            "-c",
+            &format!(
+                "mkdir -p {0} && cd {0} && git init && \
+                 git config user.email test@test && git config user.name test && \
+                 echo a > file && git add . && git commit -m 'feat: initial commit' && \
+                 echo b >> file && git add . && git commit -m 'fix: second commit' && \
+                 echo c >> file && git add . && git commit -m 'docs: third commit'",
+                tmp_repo
+            ),
+        ])
+        .output()
+        .expect("failed to create temp git repo");
+
     // Open a bash shell so the session persists after the pager exits
     s.run_ok(&[
         "open",
@@ -169,28 +186,20 @@ fn test_git_log_pager() {
     ]);
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    // Run git log inside the shell (use CARGO_MANIFEST_DIR to find the repo)
-    let repo_dir = env!("CARGO_MANIFEST_DIR");
-    let git_cmd = format!("git -C {} log --oneline -20\n", repo_dir);
+    // Run git log inside the shell
+    let git_cmd = format!("git -C {} log --oneline\n", tmp_repo);
     s.run_ok(&["type", &git_cmd]);
 
-    // Wait for some commit content to appear
-    // The repo has commits with messages like "feat:", "fix:", "refactor:", etc.
+    // Wait for known commit content to appear
     s.run_ok(&["wait", "--text", "feat", "--timeout", "8000"]);
 
     let snap_log = s.run_ok(&["snapshot"]);
     eprintln!("=== GIT LOG SNAPSHOT ===\n{}", snap_log);
 
-    // Verify we see commit history
-    let has_commits = snap_log.contains("feat")
-        || snap_log.contains("fix")
-        || snap_log.contains("refactor")
-        || snap_log.contains("chore")
-        || snap_log.contains("docs")
-        || snap_log.contains("ci");
+    // Verify we see our known commit messages
     assert!(
-        has_commits,
-        "Git log snapshot should contain commit messages: {}",
+        snap_log.contains("feat") && snap_log.contains("fix"),
+        "Git log snapshot should contain known commit messages: {}",
         snap_log
     );
 
@@ -209,4 +218,7 @@ fn test_git_log_pager() {
         "After quitting git log pager, should not still show (END): {}",
         snap_after
     );
+
+    // Clean up temp repo
+    let _ = std::fs::remove_dir_all(&tmp_repo);
 }
