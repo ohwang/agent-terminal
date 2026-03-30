@@ -9,6 +9,7 @@ mod watch;
 mod web;
 
 use clap::{Parser, Subcommand};
+use std::fs;
 
 #[derive(Parser)]
 #[command(
@@ -125,6 +126,12 @@ enum Commands {
         /// Wait for screen to stabilize for N ms after sending, then print snapshot
         #[arg(long = "wait-stable")]
         wait_stable: Option<u64>,
+        /// Save text snapshot to file after action (or print to stdout if no path given)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        capture: Option<String>,
+        /// Save PNG screenshot to file after action (auto-generates path if not given)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        screenshot: Option<String>,
     },
     /// Type literal text
     Type {
@@ -142,6 +149,12 @@ enum Commands {
         /// Wait for screen to stabilize for N ms after typing, then print snapshot
         #[arg(long = "wait-stable")]
         wait_stable: Option<u64>,
+        /// Save text snapshot to file after action (or print to stdout if no path given)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        capture: Option<String>,
+        /// Save PNG screenshot to file after action (auto-generates path if not given)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        screenshot: Option<String>,
     },
     /// Paste text via tmux paste buffer
     Paste {
@@ -240,6 +253,12 @@ enum Commands {
         /// Poll interval in ms (default: 50)
         #[arg(long, default_value = "50")]
         interval: u64,
+        /// Save text snapshot to file after wait (or print to stdout if no path given)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        capture: Option<String>,
+        /// Save PNG screenshot to file after wait (auto-generates path if not given)
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        screenshot: Option<String>,
     },
     /// Assert a condition (exit 0 if pass, exit 1 if fail)
     Assert {
@@ -625,6 +644,37 @@ fn extract_command_info(cmd: &Commands) -> Option<(String, String, Vec<String>)>
     }
 }
 
+/// Run post-action captures (--capture and --screenshot flags).
+/// Called after the primary action and any --wait-stable have completed.
+/// `already_printed` is true when --wait-stable already printed a text snapshot,
+/// so --capture to stdout is skipped (--capture to file still works).
+fn run_post_captures(
+    session: &str,
+    pane: Option<&str>,
+    capture: Option<&str>,
+    screenshot: Option<&str>,
+    already_printed: bool,
+) -> Result<(), String> {
+    if let Some(path) = capture {
+        if path.is_empty() {
+            if !already_printed {
+                let text = snapshot::capture_plain(session, pane)?;
+                print!("{}", text);
+            }
+        } else {
+            let text = snapshot::capture_plain(session, pane)?;
+            fs::write(path, &text)
+                .map_err(|e| format!("Failed to write capture to {}: {}", path, e))?;
+            eprintln!("Captured to {}", path);
+        }
+    }
+    if let Some(path) = screenshot {
+        let path_arg = if path.is_empty() { None } else { Some(path) };
+        annotate::screenshot(path_arg, false, false, "dark", session, false)?;
+    }
+    Ok(())
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -684,12 +734,22 @@ fn main() {
             session,
             pane,
             wait_stable,
+            capture,
+            screenshot,
         } => (|| {
             interact::send_keys(&keys, &session, pane.as_deref())?;
+            let waited = wait_stable.is_some();
             if let Some(stable_ms) = wait_stable {
                 let target = interact::target_for_wait(&session, pane.as_deref());
                 wait::wait_stable_only(stable_ms, &target)?;
             }
+            run_post_captures(
+                &session,
+                pane.as_deref(),
+                capture.as_deref(),
+                screenshot.as_deref(),
+                waited,
+            )?;
             Ok(())
         })(),
         Commands::Type {
@@ -698,15 +758,25 @@ fn main() {
             pane,
             enter,
             wait_stable,
+            capture,
+            screenshot,
         } => (|| {
             interact::type_text(&text, &session, pane.as_deref())?;
             if enter {
                 interact::send_keys(&["Enter".to_string()], &session, pane.as_deref())?;
             }
+            let waited = wait_stable.is_some();
             if let Some(stable_ms) = wait_stable {
                 let target = interact::target_for_wait(&session, pane.as_deref());
                 wait::wait_stable_only(stable_ms, &target)?;
             }
+            run_post_captures(
+                &session,
+                pane.as_deref(),
+                capture.as_deref(),
+                screenshot.as_deref(),
+                waited,
+            )?;
             Ok(())
         })(),
         Commands::Paste {
@@ -751,18 +821,27 @@ fn main() {
             session,
             timeout,
             interval,
-        } => wait::wait(
-            ms,
-            text.as_deref(),
-            text_gone.as_deref(),
-            stable,
-            cursor.as_deref(),
-            regex.as_deref(),
-            exit,
-            &session,
-            timeout,
-            interval,
-        ),
+            capture,
+            screenshot,
+        } => (|| {
+            wait::wait(
+                ms,
+                text.as_deref(),
+                text_gone.as_deref(),
+                stable,
+                cursor.as_deref(),
+                regex.as_deref(),
+                exit,
+                &session,
+                timeout,
+                interval,
+            )?;
+            // wait already prints a snapshot on success, so already_printed=true
+            // unless it's a hard wait (ms), which only prints "Waited Nms"
+            let already_printed = ms.is_none();
+            run_post_captures(&session, None, capture.as_deref(), screenshot.as_deref(), already_printed)?;
+            Ok(())
+        })(),
         Commands::Assert {
             text,
             no_text,

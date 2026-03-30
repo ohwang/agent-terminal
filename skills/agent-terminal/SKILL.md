@@ -18,6 +18,12 @@ Every interaction follows: **act -> wait -> observe**. Never fire-and-forget.
 # BEST -- single command: act + wait + observe
 agent-terminal send Enter --session s1 --wait-stable 300
 
+# Act + wait + screenshot in one command
+agent-terminal send Enter --session s1 --wait-stable 300 --screenshot
+
+# Act + wait + save text snapshot to file
+agent-terminal send Enter --session s1 --wait-stable 300 --capture /tmp/after.txt
+
 # Type text and submit in one command
 agent-terminal type "hello world" --enter --wait-stable 300 --session s1
 
@@ -66,8 +72,8 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `send <keys>... [--session s] [--pane p] [--wait-stable ms]` | Send key sequences (e.g., `Enter`, `C-c`, `j`). `--wait-stable` waits then prints snapshot. |
-| `type "text" [--session s] [--pane p] [--enter] [--wait-stable ms]` | Type literal text. `--enter` sends Enter after. `--wait-stable` waits then prints snapshot. |
+| `send <keys>... [--session s] [--pane p] [--wait-stable ms] [--capture [path]] [--screenshot [path]]` | Send key sequences (e.g., `Enter`, `C-c`, `j`). `--wait-stable` waits then prints snapshot. `--capture` saves text to file (or stdout). `--screenshot` saves PNG. |
+| `type "text" [--session s] [--pane p] [--enter] [--wait-stable ms] [--capture [path]] [--screenshot [path]]` | Type literal text. `--enter` sends Enter after. `--wait-stable` waits then prints snapshot. `--capture`/`--screenshot` save after action. |
 | `paste "text" [--session s] [--pane p]` | Paste via tmux buffer (safe for special chars, multi-line) |
 | `resize <cols> <rows> [--session s] [--pane p]` | Resize the terminal |
 | `click <row> <col> [--session s] [--right] [--double]` | Mouse click at position (1-indexed) |
@@ -87,6 +93,8 @@ All commands default to `--session agent-terminal` if not specified.
 | `wait --exit` | Poll until the process exits |
 
 Default timeout: 10000ms. Default poll interval: 50ms.
+
+All `wait` conditions also accept `--capture [path]` and `--screenshot [path]` to save text/PNG after the condition is met.
 
 ### Assertion
 

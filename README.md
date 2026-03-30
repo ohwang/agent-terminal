@@ -36,8 +36,8 @@ agent-terminal close --session demo
 ### Interact
 | Command | Purpose |
 |---|---|
-| `send <keys...>` | Key sequences (`j`, `Enter`, `C-c`, `Up`) |
-| `type "text"` | Literal text input |
+| `send <keys...>` | Key sequences (`j`, `Enter`, `C-c`, `Up`). Chain: `--wait-stable`, `--capture`, `--screenshot` |
+| `type "text"` | Literal text input. Chain: `--enter`, `--wait-stable`, `--capture`, `--screenshot` |
 | `paste "text"` | Via tmux buffer |
 | `resize <cols> <rows>` | Change terminal size |
 | `click <row> <col>` | Mouse click (SGR encoding) |
@@ -46,7 +46,7 @@ agent-terminal close --session demo
 ### Wait & Assert
 | Command | Purpose |
 |---|---|
-| `wait --text "str"` | Poll until text appears |
+| `wait --text "str"` | Poll until text appears. Chain: `--capture`, `--screenshot` |
 | `wait --stable <ms>` | Poll until screen stops changing |
 | `wait --regex "pat"` | Poll until regex matches |
 | `assert --text "str"` | Exit 0 if present, 1 with snapshot if not |
