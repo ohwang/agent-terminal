@@ -33,7 +33,7 @@ enum Commands {
         #[arg(long = "env", num_args = 1)]
         envs: Vec<String>,
         /// Initial terminal size (COLSxROWS)
-        #[arg(long)]
+        #[arg(long, default_value = "112x30")]
         size: Option<String>,
         /// Keep session alive after command exits (wraps in shell)
         #[arg(long)]

@@ -331,7 +331,7 @@ fn render_png(
     output_path: &str,
 ) -> Result<(), String> {
     let font = load_font()?;
-    let font_size = 16.0_f32;
+    let font_size = 26.0_f32;
     let scale = PxScale::from(font_size);
     let scaled = font.as_scaled(scale);
 

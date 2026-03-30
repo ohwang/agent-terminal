@@ -227,30 +227,34 @@ pub fn open(
                 "Session '{session}' already exists. Close it first or use a different name."
             ));
         }
-        tmux_cmd(&["new-session", "-d", "-s", session, &wrapped])?;
+        // Parse size for new-session -x/-y
+        let mut new_session_args = vec!["new-session", "-d", "-s", session];
+        let (cols_str, rows_str) = if let Some(size_str) = size {
+            let parts: Vec<&str> = size_str.split('x').collect();
+            if parts.len() != 2 {
+                return Err(format!(
+                    "Invalid --size '{size_str}': expected COLSxROWS (e.g., 80x24)"
+                ));
+            }
+            parts[0]
+                .parse::<u16>()
+                .map_err(|_| format!("Invalid columns in --size: '{}'", parts[0]))?;
+            parts[1]
+                .parse::<u16>()
+                .map_err(|_| format!("Invalid rows in --size: '{}'", parts[1]))?;
+            (Some(parts[0].to_string()), Some(parts[1].to_string()))
+        } else {
+            (None, None)
+        };
+        if let (Some(ref c), Some(ref r)) = (&cols_str, &rows_str) {
+            new_session_args.extend_from_slice(&["-x", c, "-y", r]);
+        }
+        new_session_args.push(&wrapped);
+        tmux_cmd(&new_session_args)?;
     }
 
     // Enable mouse support so the pane forwards mouse events to apps.
     let _ = tmux_cmd(&["set-option", "-t", session, "mouse", "on"]);
-
-    // Apply initial size if requested (e.g., "120x40").
-    if let Some(size_str) = size {
-        let parts: Vec<&str> = size_str.split('x').collect();
-        if parts.len() != 2 {
-            return Err(format!(
-                "Invalid --size '{size_str}': expected COLSxROWS (e.g., 80x24)"
-            ));
-        }
-        let cols = parts[0];
-        let rows = parts[1];
-        // Validate they are numeric.
-        cols.parse::<u16>()
-            .map_err(|_| format!("Invalid columns in --size: '{cols}'"))?;
-        rows.parse::<u16>()
-            .map_err(|_| format!("Invalid rows in --size: '{rows}'"))?;
-
-        tmux_cmd(&["resize-window", "-t", session, "-x", cols, "-y", rows])?;
-    }
 
     // Wait for the first render — poll up to 2 seconds for capture-pane to
     // return non-empty output.

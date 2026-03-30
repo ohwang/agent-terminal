@@ -198,7 +198,7 @@ fn test_resize_during_active_rendering() {
     let resize_path = Session::fixture_path("resize");
     s.run_ok(&["open", &resize_path]);
 
-    // Wait for the terminal size to appear (default is 80x24)
+    // Wait for the terminal size to appear (default is 112x30)
     s.run_ok(&["wait", "--text", "Size:", "--timeout", "5000"]);
     sleep_ms(500);
 
@@ -206,10 +206,10 @@ fn test_resize_during_active_rendering() {
     let initial_snap = s.run_ok(&["snapshot"]);
     println!("=== Initial Size Snapshot ===\n{}", initial_snap);
 
-    // Verify initial size is displayed (default 80x24)
+    // Verify initial size is displayed (default 112x30)
     assert!(
-        initial_snap.contains("80x24"),
-        "Initial snapshot should show 80x24, got:\n{}",
+        initial_snap.contains("112x30"),
+        "Initial snapshot should show 112x30, got:\n{}",
         initial_snap
     );
 
