@@ -131,8 +131,7 @@ fn test_ctrl_c_signal_handling_in_bash() {
 
     // Verify the session is still alive via status --json
     let status_after = s.run_ok(&["status", "--json"]);
-    let json_after: serde_json::Value =
-        serde_json::from_str(&status_after).expect("invalid JSON");
+    let json_after: serde_json::Value = serde_json::from_str(&status_after).expect("invalid JSON");
     assert_eq!(
         json_after["alive"], true,
         "Bash session should still be alive after Ctrl+C"
@@ -142,7 +141,13 @@ fn test_ctrl_c_signal_handling_in_bash() {
     s.run_ok(&["type", "echo second_command_works"]);
     sleep_ms(200);
     s.run_ok(&["send", "Enter"]);
-    s.run_ok(&["wait", "--text", "second_command_works", "--timeout", "5000"]);
+    s.run_ok(&[
+        "wait",
+        "--text",
+        "second_command_works",
+        "--timeout",
+        "5000",
+    ]);
 
     let snap_final = s.run_ok(&["snapshot"]);
     println!("=== Final snapshot ===\n{}", snap_final);

@@ -11,7 +11,10 @@ fn test_scrollback_basic() {
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
     let out = s.run_ok(&["scrollback", "--lines", "20"]);
-    assert!(out.contains("Frame:"), "Scrollback should contain Frame text");
+    assert!(
+        out.contains("Frame:"),
+        "Scrollback should contain Frame text"
+    );
 }
 
 #[test]

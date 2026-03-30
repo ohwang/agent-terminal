@@ -40,11 +40,16 @@ fn test_record_start_stop() {
 
     // Start recording
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "test-group",
-        "--label", "basic",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "test-group",
+        "--label",
+        "basic",
+        "--dir",
+        &rec_dir_str,
     ]);
 
     // Wait a bit for some frames to be captured
@@ -57,10 +62,7 @@ fn test_record_start_stop() {
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Stop recording
-    run_raw_ok(&[
-        "record", "stop",
-        "--session", &s.name,
-    ]);
+    run_raw_ok(&["record", "stop", "--session", &s.name]);
 
     // Find the recording directory
     let group_dir = rec_dir.path().join("test-group");
@@ -75,11 +77,26 @@ fn test_record_start_stop() {
     let recording_dir = entries[0].path();
 
     // Check all files exist
-    assert!(recording_dir.join("meta.json").exists(), "meta.json should exist");
-    assert!(recording_dir.join("recording.cast").exists(), "recording.cast should exist");
-    assert!(recording_dir.join("frames.jsonl").exists(), "frames.jsonl should exist");
-    assert!(recording_dir.join("actions.jsonl").exists(), "actions.jsonl should exist");
-    assert!(!recording_dir.join("pid").exists(), "pid file should be cleaned up");
+    assert!(
+        recording_dir.join("meta.json").exists(),
+        "meta.json should exist"
+    );
+    assert!(
+        recording_dir.join("recording.cast").exists(),
+        "recording.cast should exist"
+    );
+    assert!(
+        recording_dir.join("frames.jsonl").exists(),
+        "frames.jsonl should exist"
+    );
+    assert!(
+        recording_dir.join("actions.jsonl").exists(),
+        "actions.jsonl should exist"
+    );
+    assert!(
+        !recording_dir.join("pid").exists(),
+        "pid file should be cleaned up"
+    );
 
     // Validate meta.json
     let meta_str = std::fs::read_to_string(recording_dir.join("meta.json")).unwrap();
@@ -87,14 +104,26 @@ fn test_record_start_stop() {
     assert_eq!(meta["session"].as_str().unwrap(), &s.name);
     assert_eq!(meta["group"].as_str().unwrap(), "test-group");
     assert_eq!(meta["label"].as_str().unwrap(), "basic");
-    assert!(meta["stopped_at"].as_str().is_some(), "Should have stopped_at");
-    assert!(meta["frame_count"].as_u64().unwrap() >= 1, "Should have at least 1 frame");
-    assert!(meta["duration_ms"].as_u64().unwrap() > 0, "Duration should be positive");
+    assert!(
+        meta["stopped_at"].as_str().is_some(),
+        "Should have stopped_at"
+    );
+    assert!(
+        meta["frame_count"].as_u64().unwrap() >= 1,
+        "Should have at least 1 frame"
+    );
+    assert!(
+        meta["duration_ms"].as_u64().unwrap() > 0,
+        "Duration should be positive"
+    );
 
     // Validate .cast file
     let cast_str = std::fs::read_to_string(recording_dir.join("recording.cast")).unwrap();
     let cast_lines: Vec<&str> = cast_str.lines().collect();
-    assert!(cast_lines.len() >= 2, "Cast file should have header + at least 1 event");
+    assert!(
+        cast_lines.len() >= 2,
+        "Cast file should have header + at least 1 event"
+    );
 
     // Header should be valid JSON with version 2
     let header: serde_json::Value = serde_json::from_str(cast_lines[0]).unwrap();
@@ -127,11 +156,16 @@ fn test_record_action_logging() {
 
     // Start recording
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "action-test",
-        "--label", "log",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "action-test",
+        "--label",
+        "log",
+        "--dir",
+        &rec_dir_str,
     ]);
 
     std::thread::sleep(std::time::Duration::from_millis(300));
@@ -144,10 +178,7 @@ fn test_record_action_logging() {
     std::thread::sleep(std::time::Duration::from_millis(300));
 
     // Stop recording
-    run_raw_ok(&[
-        "record", "stop",
-        "--session", &s.name,
-    ]);
+    run_raw_ok(&["record", "stop", "--session", &s.name]);
 
     // Find the recording
     let group_dir = rec_dir.path().join("action-test");
@@ -185,20 +216,21 @@ fn test_record_deduplication() {
 
     // Start recording — don't interact, so screen should stay the same
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "dedup-test",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "dedup-test",
+        "--dir",
+        &rec_dir_str,
     ]);
 
     // Wait 2 seconds without any interaction
     std::thread::sleep(std::time::Duration::from_millis(2000));
 
     // Stop recording
-    run_raw_ok(&[
-        "record", "stop",
-        "--session", &s.name,
-    ]);
+    run_raw_ok(&["record", "stop", "--session", &s.name]);
 
     // Find the recording
     let group_dir = rec_dir.path().join("dedup-test");
@@ -231,11 +263,16 @@ fn test_record_list() {
 
     // Create two recordings in different groups
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "group-a",
-        "--label", "first",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "group-a",
+        "--label",
+        "first",
+        "--dir",
+        &rec_dir_str,
     ]);
     std::thread::sleep(std::time::Duration::from_millis(300));
     run_raw_ok(&["record", "stop", "--session", &s.name]);
@@ -243,11 +280,16 @@ fn test_record_list() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "group-b",
-        "--label", "second",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "group-b",
+        "--label",
+        "second",
+        "--dir",
+        &rec_dir_str,
     ]);
     std::thread::sleep(std::time::Duration::from_millis(300));
     run_raw_ok(&["record", "stop", "--session", &s.name]);
@@ -276,11 +318,16 @@ fn test_record_group_label_structure() {
 
     // Record "before"
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "fix-123",
-        "--label", "before",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "fix-123",
+        "--label",
+        "before",
+        "--dir",
+        &rec_dir_str,
     ]);
     std::thread::sleep(std::time::Duration::from_millis(300));
     run_raw_ok(&["record", "stop", "--session", &s.name]);
@@ -289,11 +336,16 @@ fn test_record_group_label_structure() {
 
     // Record "after"
     run_raw_ok(&[
-        "record", "start",
-        "--session", &s.name,
-        "--group", "fix-123",
-        "--label", "after",
-        "--dir", &rec_dir_str,
+        "record",
+        "start",
+        "--session",
+        &s.name,
+        "--group",
+        "fix-123",
+        "--label",
+        "after",
+        "--dir",
+        &rec_dir_str,
     ]);
     std::thread::sleep(std::time::Duration::from_millis(300));
     run_raw_ok(&["record", "stop", "--session", &s.name]);

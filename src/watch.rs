@@ -337,11 +337,7 @@ fn render_grid(f: &mut ratatui::Frame, app: &App) {
     }
 
     // Reserve 1 row for the status bar at the bottom
-    let chunks = Layout::vertical([
-        Constraint::Min(1),
-        Constraint::Length(1),
-    ])
-    .split(area);
+    let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
     let grid_area = chunks[0];
     let status_area = chunks[1];
 
@@ -448,11 +444,7 @@ fn render_zoomed(f: &mut ratatui::Frame, app: &App) {
         }
     };
 
-    let chunks = Layout::vertical([
-        Constraint::Min(1),
-        Constraint::Length(1),
-    ])
-    .split(area);
+    let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
     let content_area = chunks[0];
     let status_area = chunks[1];
 
@@ -567,8 +559,7 @@ fn run_inner(interval: u64, filter: Option<&str>) -> Result<(), String> {
                             app.zoomed = true;
                             app.scroll_offset = 0;
                             // Force immediate re-poll with ANSI capture
-                            app.last_poll =
-                                Instant::now() - Duration::from_secs(10);
+                            app.last_poll = Instant::now() - Duration::from_secs(10);
                         }
                     }
                     KeyCode::Tab => {

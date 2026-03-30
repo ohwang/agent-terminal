@@ -170,7 +170,10 @@ fn test_git_log_pager() {
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Run git log inside the shell
-    s.run_ok(&["type", "git -C /Users/odin/dev/repos/agent-terminal log --oneline -20\n"]);
+    s.run_ok(&[
+        "type",
+        "git -C /Users/odin/dev/repos/agent-terminal log --oneline -20\n",
+    ]);
 
     // Wait for some commit content to appear
     // The repo has commits with messages like "feat:", "fix:", "refactor:", etc.

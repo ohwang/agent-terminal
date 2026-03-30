@@ -31,7 +31,10 @@ fn test_large_output_and_scrollback() {
 
     // Take a regular snapshot - should show only the visible portion (bottom of output)
     let plain_snap = s.run_ok(&["snapshot"]);
-    println!("=== Plain Snapshot (last visible portion) ===\n{}", plain_snap);
+    println!(
+        "=== Plain Snapshot (last visible portion) ===\n{}",
+        plain_snap
+    );
 
     // The visible portion should contain "500" (the end) but likely NOT "1" at the very start
     assert!(
@@ -183,10 +186,7 @@ fn test_rapid_input_stress() {
     // Performance observation
     let avg_ms = elapsed.as_millis() as f64 / 50.0;
     println!("Average time per send: {:.1}ms", avg_ms);
-    println!(
-        "Total elapsed: {:.0}ms for 50 keys",
-        elapsed.as_millis()
-    );
+    println!("Total elapsed: {:.0}ms for 50 keys", elapsed.as_millis());
 }
 
 /// Scenario 16: Resize during active rendering

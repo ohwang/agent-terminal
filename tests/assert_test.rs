@@ -99,7 +99,13 @@ fn test_assert_color_style_blue_underline() {
     s.open_fixture_wait("color", "Blue Underline");
 
     // Row 3 should have blue underline
-    let out = s.run_ok(&["assert", "--color", "3", "--color-style", "fg:blue,underline"]);
+    let out = s.run_ok(&[
+        "assert",
+        "--color",
+        "3",
+        "--color-style",
+        "fg:blue,underline",
+    ]);
     assert!(out.contains("PASS"));
 }
 
@@ -119,7 +125,13 @@ fn test_assert_color_style_yellow_on_blue() {
     s.open_fixture_wait("color", "Yellow on Blue");
 
     // Row 6 should have yellow foreground on blue background
-    let out = s.run_ok(&["assert", "--color", "6", "--color-style", "fg:yellow,bg:blue"]);
+    let out = s.run_ok(&[
+        "assert",
+        "--color",
+        "6",
+        "--color-style",
+        "fg:yellow,bg:blue",
+    ]);
     assert!(out.contains("PASS"));
 }
 
@@ -149,7 +161,13 @@ fn test_assert_style_text_bold() {
     s.open_fixture_wait("color", "Green Bold");
 
     // "Green Bold" should have bold + green
-    let out = s.run_ok(&["assert", "--style", "Green Bold", "--style-check", "fg:green,bold"]);
+    let out = s.run_ok(&[
+        "assert",
+        "--style",
+        "Green Bold",
+        "--style-check",
+        "fg:green,bold",
+    ]);
     assert!(out.contains("PASS"));
 }
 
@@ -159,7 +177,13 @@ fn test_assert_style_text_fail_wrong_style() {
     s.open_fixture_wait("color", "Red Text");
 
     // "Red Text" is red, not bold green -- should fail
-    let out = s.run_fail(&["assert", "--style", "Red Text", "--style-check", "fg:green,bold"]);
+    let out = s.run_fail(&[
+        "assert",
+        "--style",
+        "Red Text",
+        "--style-check",
+        "fg:green,bold",
+    ]);
     assert!(out.contains("FAIL"));
 }
 
@@ -169,6 +193,12 @@ fn test_assert_style_text_not_found() {
     s.open_fixture_wait("color", "Red Text");
 
     // Text that doesn't exist on screen
-    let out = s.run_fail(&["assert", "--style", "Nonexistent Text", "--style-check", "fg:red"]);
+    let out = s.run_fail(&[
+        "assert",
+        "--style",
+        "Nonexistent Text",
+        "--style-check",
+        "fg:red",
+    ]);
     assert!(out.contains("FAIL") || out.contains("not found"));
 }

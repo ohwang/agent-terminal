@@ -136,8 +136,7 @@ pub fn start(
     let meta_path = rec_dir.join("meta.json");
     let meta_json = serde_json::to_string_pretty(&meta)
         .map_err(|e| format!("Failed to serialize meta.json: {}", e))?;
-    fs::write(&meta_path, meta_json)
-        .map_err(|e| format!("Failed to write meta.json: {}", e))?;
+    fs::write(&meta_path, meta_json).map_err(|e| format!("Failed to write meta.json: {}", e))?;
 
     // Create empty actions.jsonl
     fs::write(rec_dir.join("actions.jsonl"), "")
@@ -150,8 +149,8 @@ pub fn start(
     let fps = fps.unwrap_or(DEFAULT_FPS);
 
     // Spawn background poller via re-invoking ourselves
-    let exe = std::env::current_exe()
-        .map_err(|e| format!("Failed to find current executable: {}", e))?;
+    let exe =
+        std::env::current_exe().map_err(|e| format!("Failed to find current executable: {}", e))?;
 
     let child = Command::new(&exe)
         .args([
@@ -392,13 +391,14 @@ pub fn list(dir: Option<&str>, json: bool) -> Result<(), String> {
     let mut recordings: Vec<RecordingMeta> = Vec::new();
 
     // Walk group directories
-    let entries = fs::read_dir(&base).map_err(|e| format!("Failed to read recordings dir: {}", e))?;
+    let entries =
+        fs::read_dir(&base).map_err(|e| format!("Failed to read recordings dir: {}", e))?;
     for group_entry in entries.flatten() {
         if !group_entry.path().is_dir() {
             continue;
         }
-        let rec_entries =
-            fs::read_dir(group_entry.path()).map_err(|e| format!("Failed to read group dir: {}", e))?;
+        let rec_entries = fs::read_dir(group_entry.path())
+            .map_err(|e| format!("Failed to read group dir: {}", e))?;
         for rec_entry in rec_entries.flatten() {
             let meta_path = rec_entry.path().join("meta.json");
             if let Ok(meta_str) = fs::read_to_string(&meta_path) {
@@ -550,7 +550,11 @@ pub fn view(dir: &str, all_frames: bool, json: bool) -> Result<(), String> {
                 "=== Recording: session={}, group={}, label={} ===",
                 m.session,
                 m.group,
-                if m.label.is_empty() { "<none>" } else { &m.label }
+                if m.label.is_empty() {
+                    "<none>"
+                } else {
+                    &m.label
+                }
             );
             println!(
                 "=== {}x{}, {}ms, {} frames, {} actions ===",
@@ -573,7 +577,10 @@ pub fn view(dir: &str, all_frames: bool, json: bool) -> Result<(), String> {
             match kind {
                 EventKind::Frame(i) => {
                     let f = &frames[*i];
-                    println!("--- Frame @ {}ms ({}x{}) ---", f.timestamp_ms as u64, f.cols, f.rows);
+                    println!(
+                        "--- Frame @ {}ms ({}x{}) ---",
+                        f.timestamp_ms as u64, f.cols, f.rows
+                    );
                     println!("{}", f.text);
                     println!();
                 }
@@ -672,7 +679,11 @@ pub fn log_action(session: &str, command: &str, args: &[String]) {
     };
 
     let actions_path = rec_dir.join("actions.jsonl");
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&actions_path) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&actions_path)
+    {
         if let Ok(json) = serde_json::to_string(&entry) {
             let _ = writeln!(file, "{}", json);
         }

@@ -38,7 +38,10 @@ crossterm = "0.28"
     assert!(test_file.exists(), "Should create tests/tui/basic_test.sh");
 
     let content = fs::read_to_string(&test_file).unwrap();
-    assert!(content.contains("agent-terminal"), "Generated test should reference agent-terminal");
+    assert!(
+        content.contains("agent-terminal"),
+        "Generated test should reference agent-terminal"
+    );
 }
 
 #[test]
@@ -106,6 +109,9 @@ fn test_init_no_framework() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should still succeed and generate a generic test
-    assert!(output.status.success(), "init should succeed even without framework: stderr={}",
-            String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "init should succeed even without framework: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

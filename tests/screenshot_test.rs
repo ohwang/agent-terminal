@@ -64,7 +64,14 @@ fn test_screenshot_html_light_theme() {
     let path = dir.path().join("light.html");
     let path_str = path.to_string_lossy().to_string();
 
-    s.run_ok(&["screenshot", "--html", "--theme", "light", "--path", &path_str]);
+    s.run_ok(&[
+        "screenshot",
+        "--html",
+        "--theme",
+        "light",
+        "--path",
+        &path_str,
+    ]);
 
     let content = std::fs::read_to_string(&path).unwrap();
     // Light theme should use white/light background

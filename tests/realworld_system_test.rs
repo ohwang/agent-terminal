@@ -58,17 +58,11 @@ fn test_htop_system_monitor() {
 
 #[test]
 fn test_grep_colored_output() {
-    let tmp_file = format!(
-        "/tmp/agent-terminal-grep-test-{}.txt",
-        std::process::id()
-    );
+    let tmp_file = format!("/tmp/agent-terminal-grep-test-{}.txt", std::process::id());
 
     // Create a temp file with several lines
-    fs::write(
-        &tmp_file,
-        "hello world\nfoo bar\nhello again\ngoodbye\n",
-    )
-    .expect("failed to create temp file");
+    fs::write(&tmp_file, "hello world\nfoo bar\nhello again\ngoodbye\n")
+        .expect("failed to create temp file");
 
     let s = Session::new();
 
@@ -103,13 +97,14 @@ fn test_grep_colored_output() {
     // Non-matching lines should NOT appear in the grep output lines
     // (they may appear in the temp file path, but not as standalone output lines)
     // Check that "foo bar" does not appear as a standalone line
-    let has_foo_bar_line = snap_plain
-        .lines()
-        .any(|line| {
-            let trimmed = line.trim();
-            // Skip lines that are the command itself or the header
-            !trimmed.contains("grep") && !trimmed.starts_with('[') && !trimmed.starts_with("─") && trimmed == "foo bar"
-        });
+    let has_foo_bar_line = snap_plain.lines().any(|line| {
+        let trimmed = line.trim();
+        // Skip lines that are the command itself or the header
+        !trimmed.contains("grep")
+            && !trimmed.starts_with('[')
+            && !trimmed.starts_with("─")
+            && trimmed == "foo bar"
+    });
     assert!(
         !has_foo_bar_line,
         "grep output should NOT contain 'foo bar' as a standalone output line. Got:\n{}",
@@ -122,9 +117,8 @@ fn test_grep_colored_output() {
 
     // The color snapshot should contain color annotations for the highlighted match
     // grep --color=always wraps matches in red/bold by default
-    let has_color_annotation = snap_color.contains("[fg:")
-        || snap_color.contains("[bold")
-        || snap_color.contains("red");
+    let has_color_annotation =
+        snap_color.contains("[fg:") || snap_color.contains("[bold") || snap_color.contains("red");
     assert!(
         has_color_annotation,
         "Color snapshot should contain color annotations from grep. Got:\n{}",
@@ -160,7 +154,10 @@ fn test_unicode_and_emoji_rendering() {
     // --- Test 1: Emoji and special characters ---
     // Use printf with octal/hex escapes to reliably produce UTF-8 bytes,
     // or use echo with actual UTF-8 characters typed directly
-    s.run_ok(&["type", "echo 'Hello \u{1F30D} World \u{1F389} \u{2605} \u{2660} \u{2665} \u{2666} \u{2663}'"]);
+    s.run_ok(&[
+        "type",
+        "echo 'Hello \u{1F30D} World \u{1F389} \u{2605} \u{2660} \u{2665} \u{2666} \u{2663}'",
+    ]);
     pause(200);
     s.run_ok(&["send", "Enter"]);
     pause(1000);
@@ -194,10 +191,7 @@ fn test_unicode_and_emoji_rendering() {
     // Check for emoji (non-BMP, may or may not render in tmux)
     let has_globe = snap_emoji.contains('\u{1F30D}'); // 🌍
     let has_party = snap_emoji.contains('\u{1F389}'); // 🎉
-    eprintln!(
-        "Emoji found: globe={} party={}",
-        has_globe, has_party
-    );
+    eprintln!("Emoji found: globe={} party={}", has_globe, has_party);
 
     // At least some unicode symbols should be captured
     let unicode_count = [has_star, has_spade, has_heart, has_diamond, has_club]
@@ -254,7 +248,8 @@ fn test_unicode_and_emoji_rendering() {
     // Check for box drawing characters
     let has_box_top = snap_box.contains("├──┤") || snap_box.contains("├") || snap_box.contains("┤");
     let has_box_side = snap_box.contains('│');
-    let has_box_bottom = snap_box.contains("└──┘") || snap_box.contains("└") || snap_box.contains("┘");
+    let has_box_bottom =
+        snap_box.contains("└──┘") || snap_box.contains("└") || snap_box.contains("┘");
     eprintln!(
         "Box drawing found: top={} side={} bottom={}",
         has_box_top, has_box_side, has_box_bottom

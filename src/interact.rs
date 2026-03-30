@@ -108,7 +108,7 @@ pub fn click(row: u16, col: u16, session: &str, right: bool, double: bool) -> Re
     let target = target_str(session, None);
     let btn = if right { 2 } else { 0 };
 
-    let press   = format!("\x1b[<{};{};{}M", btn, col, row);
+    let press = format!("\x1b[<{};{};{}M", btn, col, row);
     let release = format!("\x1b[<{};{};{}m", btn, col, row);
 
     let count = if double { 2 } else { 1 };
@@ -131,7 +131,7 @@ pub fn drag(r1: u16, c1: u16, r2: u16, c2: u16, session: &str) -> Result<(), Str
     let target = target_str(session, None);
 
     // Button 0 = left; 32 = motion flag (added for move events).
-    let press   = format!("\x1b[<0;{};{}M", c1, r1);
+    let press = format!("\x1b[<0;{};{}M", c1, r1);
     let release = format!("\x1b[<0;{};{}m", c2, r2);
 
     // Send press and release as separate commands so the target
@@ -151,7 +151,12 @@ pub fn scroll_wheel(direction: &str, row: u16, col: u16, session: &str) -> Resul
     let btn = match direction.to_lowercase().as_str() {
         "up" => 64,
         "down" => 65,
-        other => return Err(format!("Unknown scroll direction '{}': use 'up' or 'down'", other)),
+        other => {
+            return Err(format!(
+                "Unknown scroll direction '{}': use 'up' or 'down'",
+                other
+            ))
+        }
     };
 
     let seq = format!("\x1b[<{};{};{}M", btn, col, row);
@@ -165,13 +170,7 @@ pub fn scroll_wheel(direction: &str, row: u16, col: u16, session: &str) -> Resul
 /// This is different from `send_keys "C-c"` which merely sends a keystroke.
 pub fn signal(signal_name: &str, session: &str) -> Result<(), String> {
     // Obtain the PID of the foreground process in the pane.
-    let pid_str = tmux_cmd(&[
-        "display-message",
-        "-t",
-        session,
-        "-p",
-        "#{pane_pid}",
-    ])?;
+    let pid_str = tmux_cmd(&["display-message", "-t", session, "-p", "#{pane_pid}"])?;
     let pid_str = pid_str.trim();
     let pid: i32 = pid_str
         .parse()

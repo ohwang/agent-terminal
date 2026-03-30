@@ -65,7 +65,11 @@ fn test_open_pane_splits_session() {
 
     // The session should still be alive
     let status = s.run_ok(&["status"]);
-    assert!(status.contains("alive"), "Session should be alive: {}", status);
+    assert!(
+        status.contains("alive"),
+        "Session should be alive: {}",
+        status
+    );
 }
 
 #[test]
@@ -305,8 +309,16 @@ fn test_snapshot_window_json() {
     let json: serde_json::Value = serde_json::from_str(&snap).expect("invalid JSON");
 
     // Should have window_size and panes array
-    assert!(json["window_size"].is_object(), "Should have window_size: {}", snap);
-    assert!(json["panes"].is_array(), "Should have panes array: {}", snap);
+    assert!(
+        json["window_size"].is_object(),
+        "Should have window_size: {}",
+        snap
+    );
+    assert!(
+        json["panes"].is_array(),
+        "Should have panes array: {}",
+        snap
+    );
     assert_eq!(
         json["panes"].as_array().unwrap().len(),
         2,
@@ -351,7 +363,10 @@ fn test_screenshot_window_html() {
     s.run_ok(&["open", &echo_path, "--pane", "second"]);
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    let tmp = format!("/tmp/agent-terminal-test-window-{}.html", std::process::id());
+    let tmp = format!(
+        "/tmp/agent-terminal-test-window-{}.html",
+        std::process::id()
+    );
     let out = s.run_ok(&["screenshot", "--window", "--html", "--path", &tmp]);
     assert!(out.contains("Screenshot saved to"), "Should save: {}", out);
 

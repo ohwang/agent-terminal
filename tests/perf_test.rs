@@ -60,11 +60,29 @@ fn test_perf_fps_during() {
 
     // Should produce valid FPS metrics with numeric fields
     assert!(json["fps"].is_number(), "fps should be a number");
-    assert!(json["frame_count"].is_number(), "frame_count should be a number");
-    assert!(json["duration_ms"].is_number(), "duration_ms should be a number");
-    assert!(json["min_frame_ms"].is_number(), "min_frame_ms should be a number");
-    assert!(json["max_frame_ms"].is_number(), "max_frame_ms should be a number");
-    assert!(json["mean_frame_ms"].is_number(), "mean_frame_ms should be a number");
-    assert!(json["p95_frame_ms"].is_number(), "p95_frame_ms should be a number");
+    assert!(
+        json["frame_count"].is_number(),
+        "frame_count should be a number"
+    );
+    assert!(
+        json["duration_ms"].is_number(),
+        "duration_ms should be a number"
+    );
+    assert!(
+        json["min_frame_ms"].is_number(),
+        "min_frame_ms should be a number"
+    );
+    assert!(
+        json["max_frame_ms"].is_number(),
+        "max_frame_ms should be a number"
+    );
+    assert!(
+        json["mean_frame_ms"].is_number(),
+        "mean_frame_ms should be a number"
+    );
+    assert!(
+        json["p95_frame_ms"].is_number(),
+        "p95_frame_ms should be a number"
+    );
     assert!(json["timeline"].is_array(), "timeline should be an array");
 }

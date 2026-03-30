@@ -1,17 +1,21 @@
+mod annotate;
+mod interact;
+mod perf;
+mod record;
 mod session;
 mod snapshot;
-mod interact;
 mod wait;
-mod annotate;
-mod perf;
 mod watch;
-mod record;
 mod web;
 
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "agent-terminal", version, about = "TUI testing tool for autonomous agent-driven terminal application testing")]
+#[command(
+    name = "agent-terminal",
+    version,
+    about = "TUI testing tool for autonomous agent-driven terminal application testing"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -508,67 +512,115 @@ enum RecordCommands {
 
 fn extract_command_info(cmd: &Commands) -> Option<(String, String, Vec<String>)> {
     match cmd {
-        Commands::Send { keys, session, .. } => Some((
-            session.clone(),
-            "send".to_string(),
-            keys.clone(),
-        )),
-        Commands::Type { text, session, .. } => Some((
-            session.clone(),
-            "type".to_string(),
-            vec![text.clone()],
-        )),
-        Commands::Paste { text, session, .. } => Some((
-            session.clone(),
-            "paste".to_string(),
-            vec![text.clone()],
-        )),
-        Commands::Click { row, col, session, right, double, .. } => Some((
+        Commands::Send { keys, session, .. } => {
+            Some((session.clone(), "send".to_string(), keys.clone()))
+        }
+        Commands::Type { text, session, .. } => {
+            Some((session.clone(), "type".to_string(), vec![text.clone()]))
+        }
+        Commands::Paste { text, session, .. } => {
+            Some((session.clone(), "paste".to_string(), vec![text.clone()]))
+        }
+        Commands::Click {
+            row,
+            col,
+            session,
+            right,
+            double,
+            ..
+        } => Some((
             session.clone(),
             "click".to_string(),
-            vec![format!("{},{}", row, col), format!("right={},double={}", right, double)],
+            vec![
+                format!("{},{}", row, col),
+                format!("right={},double={}", right, double),
+            ],
         )),
-        Commands::Drag { r1, c1, r2, c2, session, .. } => Some((
+        Commands::Drag {
+            r1,
+            c1,
+            r2,
+            c2,
+            session,
+            ..
+        } => Some((
             session.clone(),
             "drag".to_string(),
             vec![format!("{},{} -> {},{}", r1, c1, r2, c2)],
         )),
-        Commands::Resize { cols, rows, session, .. } => Some((
+        Commands::Resize {
+            cols,
+            rows,
+            session,
+            ..
+        } => Some((
             session.clone(),
             "resize".to_string(),
             vec![format!("{}x{}", cols, rows)],
         )),
-        Commands::ScrollWheel { direction, row, col, session, .. } => Some((
+        Commands::ScrollWheel {
+            direction,
+            row,
+            col,
+            session,
+            ..
+        } => Some((
             session.clone(),
             "scroll".to_string(),
             vec![direction.clone(), format!("{},{}", row, col)],
         )),
-        Commands::Wait { session, text, text_gone, stable, cursor, regex, exit, .. } => {
+        Commands::Wait {
+            session,
+            text,
+            text_gone,
+            stable,
+            cursor,
+            regex,
+            exit,
+            ..
+        } => {
             let mut args = Vec::new();
-            if let Some(t) = text { args.push(format!("--text {}", t)); }
-            if let Some(t) = text_gone { args.push(format!("--text-gone {}", t)); }
-            if let Some(s) = stable { args.push(format!("--stable {}", s)); }
-            if let Some(c) = cursor { args.push(format!("--cursor {}", c)); }
-            if let Some(r) = regex { args.push(format!("--regex {}", r)); }
-            if *exit { args.push("--exit".to_string()); }
+            if let Some(t) = text {
+                args.push(format!("--text {}", t));
+            }
+            if let Some(t) = text_gone {
+                args.push(format!("--text-gone {}", t));
+            }
+            if let Some(s) = stable {
+                args.push(format!("--stable {}", s));
+            }
+            if let Some(c) = cursor {
+                args.push(format!("--cursor {}", c));
+            }
+            if let Some(r) = regex {
+                args.push(format!("--regex {}", r));
+            }
+            if *exit {
+                args.push("--exit".to_string());
+            }
             Some((session.clone(), "wait".to_string(), args))
         }
-        Commands::Assert { session, text, no_text, .. } => {
+        Commands::Assert {
+            session,
+            text,
+            no_text,
+            ..
+        } => {
             let mut args = Vec::new();
-            if let Some(t) = text { args.push(format!("--text {}", t)); }
-            if let Some(t) = no_text { args.push(format!("--no-text {}", t)); }
+            if let Some(t) = text {
+                args.push(format!("--text {}", t));
+            }
+            if let Some(t) = no_text {
+                args.push(format!("--no-text {}", t));
+            }
             Some((session.clone(), "assert".to_string(), args))
         }
-        Commands::Signal { signal, session, .. } => Some((
-            session.clone(),
-            "signal".to_string(),
-            vec![signal.clone()],
-        )),
-        Commands::Find { pattern, session, .. } => Some((
-            session.clone(),
-            "find".to_string(),
-            vec![pattern.clone()],
-        )),
+        Commands::Signal {
+            signal, session, ..
+        } => Some((session.clone(), "signal".to_string(), vec![signal.clone()])),
+        Commands::Find {
+            pattern, session, ..
+        } => Some((session.clone(), "find".to_string(), vec![pattern.clone()])),
         _ => None,
     }
 }
@@ -580,129 +632,241 @@ fn main() {
     let action_info = extract_command_info(&cli.command);
 
     let result = match cli.command {
-        Commands::Open { command, session, pane, envs, size, shell, no_stderr } => {
-            session::open(&command, &session, pane.as_deref(), &envs, size.as_deref(), shell, no_stderr)
-        }
-        Commands::Close { session } => {
-            session::close(&session)
-        }
-        Commands::List => {
-            session::list()
-        }
-        Commands::Status { session, pane, json } => {
-            session::status(&session, pane.as_deref(), json)
-        }
-        Commands::ExitCode { session } => {
-            session::exit_code(&session)
-        }
-        Commands::Logs { session, stderr } => {
-            session::logs(&session, stderr)
-        }
-        Commands::Snapshot { session, pane, window, color, raw, ansi, json, diff, scrollback } => {
-            snapshot::snapshot(&session, pane.as_deref(), window, color, raw, ansi, json, diff, scrollback)
-        }
-        Commands::Send { keys, session, pane, wait_stable } => {
-            (|| {
-                interact::send_keys(&keys, &session, pane.as_deref())?;
-                if let Some(stable_ms) = wait_stable {
-                    let target = interact::target_for_wait(&session, pane.as_deref());
-                    wait::wait_stable_only(stable_ms, &target)?;
-                }
-                Ok(())
-            })()
-        }
-        Commands::Type { text, session, pane, enter, wait_stable } => {
-            (|| {
-                interact::type_text(&text, &session, pane.as_deref())?;
-                if enter {
-                    interact::send_keys(&["Enter".to_string()], &session, pane.as_deref())?;
-                }
-                if let Some(stable_ms) = wait_stable {
-                    let target = interact::target_for_wait(&session, pane.as_deref());
-                    wait::wait_stable_only(stable_ms, &target)?;
-                }
-                Ok(())
-            })()
-        }
-        Commands::Paste { text, session, pane } => {
-            interact::paste(&text, &session, pane.as_deref())
-        }
-        Commands::Resize { cols, rows, session, pane } => {
-            interact::resize(cols, rows, &session, pane.as_deref())
-        }
-        Commands::Click { row, col, session, right, double } => {
-            interact::click(row, col, &session, right, double)
-        }
-        Commands::Drag { r1, c1, r2, c2, session } => {
-            interact::drag(r1, c1, r2, c2, &session)
-        }
-        Commands::ScrollWheel { direction, row, col, session } => {
-            interact::scroll_wheel(&direction, row, col, &session)
-        }
-        Commands::Wait { ms, text, text_gone, stable, cursor, regex, exit, session, timeout, interval } => {
-            wait::wait(ms, text.as_deref(), text_gone.as_deref(), stable, cursor.as_deref(), regex.as_deref(), exit, &session, timeout, interval)
-        }
-        Commands::Assert { text, no_text, row, row_text, cursor_row, color, color_style, style, style_check, session } => {
-            wait::assert_cmd(text.as_deref(), no_text.as_deref(), row, row_text.as_deref(), cursor_row, color, color_style.as_deref(), style.as_deref(), style_check.as_deref(), &session)
-        }
-        Commands::Find { pattern, all, regex, color, session } => {
-            wait::find(&pattern, all, regex, color.as_deref(), &session)
-        }
-        Commands::Screenshot { path, annotate, html, theme, session, window } => {
-            annotate::screenshot(path.as_deref(), annotate, html, &theme, &session, window)
-        }
-        Commands::Signal { signal, session } => {
-            interact::signal(&signal, &session)
-        }
-        Commands::Clipboard { operation, text, session } => {
-            interact::clipboard(&operation, text.as_deref(), &session)
-        }
-        Commands::Scrollback { lines, search, session } => {
-            snapshot::scrollback_cmd(lines, search.as_deref(), &session)
-        }
-        Commands::Perf { command } => {
-            match command {
-                PerfCommands::Start { session } => perf::start(&session),
-                PerfCommands::Stop { json, session } => perf::stop(json, &session),
-                PerfCommands::Fps { during, during_batch, duration, session } => {
-                    perf::fps(during.as_deref(), during_batch, duration, &session)
-                }
-                PerfCommands::Latency { key, samples, json, session } => {
-                    perf::latency(key.as_deref(), samples, json, &session)
-                }
+        Commands::Open {
+            command,
+            session,
+            pane,
+            envs,
+            size,
+            shell,
+            no_stderr,
+        } => session::open(
+            &command,
+            &session,
+            pane.as_deref(),
+            &envs,
+            size.as_deref(),
+            shell,
+            no_stderr,
+        ),
+        Commands::Close { session } => session::close(&session),
+        Commands::List => session::list(),
+        Commands::Status {
+            session,
+            pane,
+            json,
+        } => session::status(&session, pane.as_deref(), json),
+        Commands::ExitCode { session } => session::exit_code(&session),
+        Commands::Logs { session, stderr } => session::logs(&session, stderr),
+        Commands::Snapshot {
+            session,
+            pane,
+            window,
+            color,
+            raw,
+            ansi,
+            json,
+            diff,
+            scrollback,
+        } => snapshot::snapshot(
+            &session,
+            pane.as_deref(),
+            window,
+            color,
+            raw,
+            ansi,
+            json,
+            diff,
+            scrollback,
+        ),
+        Commands::Send {
+            keys,
+            session,
+            pane,
+            wait_stable,
+        } => (|| {
+            interact::send_keys(&keys, &session, pane.as_deref())?;
+            if let Some(stable_ms) = wait_stable {
+                let target = interact::target_for_wait(&session, pane.as_deref());
+                wait::wait_stable_only(stable_ms, &target)?;
             }
-        }
-        Commands::Doctor => {
-            session::doctor()
-        }
-        Commands::Init => {
-            session::init()
-        }
-        Commands::TestMatrix { command, sizes, terms, colors, test } => {
-            session::test_matrix(&command, sizes.as_deref(), terms.as_deref(), colors.as_deref(), &test)
-        }
-        Commands::A11yCheck { command } => {
-            session::a11y_check(&command)
-        }
-        Commands::Watch { interval, filter } => {
-            watch::run(interval, filter.as_deref())
-        }
-        Commands::Record { command } => {
-            match command {
-                RecordCommands::Start { session, group, label, fps, dir } => {
-                    record::start(&session, &group, &label, fps, dir.as_deref())
-                }
-                RecordCommands::Stop { session } => record::stop(&session),
-                RecordCommands::List { dir, json } => record::list(dir.as_deref(), json),
-                RecordCommands::View { dir, all_frames, json } => record::view(&dir, all_frames, json),
-                RecordCommands::Poll { session, recording_dir, fps } => {
-                    record::poll(&session, &recording_dir, fps)
-                }
+            Ok(())
+        })(),
+        Commands::Type {
+            text,
+            session,
+            pane,
+            enter,
+            wait_stable,
+        } => (|| {
+            interact::type_text(&text, &session, pane.as_deref())?;
+            if enter {
+                interact::send_keys(&["Enter".to_string()], &session, pane.as_deref())?;
             }
-        }
-        Commands::Web { dir, port } => {
-            web::serve(dir.as_deref(), port)
-        }
+            if let Some(stable_ms) = wait_stable {
+                let target = interact::target_for_wait(&session, pane.as_deref());
+                wait::wait_stable_only(stable_ms, &target)?;
+            }
+            Ok(())
+        })(),
+        Commands::Paste {
+            text,
+            session,
+            pane,
+        } => interact::paste(&text, &session, pane.as_deref()),
+        Commands::Resize {
+            cols,
+            rows,
+            session,
+            pane,
+        } => interact::resize(cols, rows, &session, pane.as_deref()),
+        Commands::Click {
+            row,
+            col,
+            session,
+            right,
+            double,
+        } => interact::click(row, col, &session, right, double),
+        Commands::Drag {
+            r1,
+            c1,
+            r2,
+            c2,
+            session,
+        } => interact::drag(r1, c1, r2, c2, &session),
+        Commands::ScrollWheel {
+            direction,
+            row,
+            col,
+            session,
+        } => interact::scroll_wheel(&direction, row, col, &session),
+        Commands::Wait {
+            ms,
+            text,
+            text_gone,
+            stable,
+            cursor,
+            regex,
+            exit,
+            session,
+            timeout,
+            interval,
+        } => wait::wait(
+            ms,
+            text.as_deref(),
+            text_gone.as_deref(),
+            stable,
+            cursor.as_deref(),
+            regex.as_deref(),
+            exit,
+            &session,
+            timeout,
+            interval,
+        ),
+        Commands::Assert {
+            text,
+            no_text,
+            row,
+            row_text,
+            cursor_row,
+            color,
+            color_style,
+            style,
+            style_check,
+            session,
+        } => wait::assert_cmd(
+            text.as_deref(),
+            no_text.as_deref(),
+            row,
+            row_text.as_deref(),
+            cursor_row,
+            color,
+            color_style.as_deref(),
+            style.as_deref(),
+            style_check.as_deref(),
+            &session,
+        ),
+        Commands::Find {
+            pattern,
+            all,
+            regex,
+            color,
+            session,
+        } => wait::find(&pattern, all, regex, color.as_deref(), &session),
+        Commands::Screenshot {
+            path,
+            annotate,
+            html,
+            theme,
+            session,
+            window,
+        } => annotate::screenshot(path.as_deref(), annotate, html, &theme, &session, window),
+        Commands::Signal { signal, session } => interact::signal(&signal, &session),
+        Commands::Clipboard {
+            operation,
+            text,
+            session,
+        } => interact::clipboard(&operation, text.as_deref(), &session),
+        Commands::Scrollback {
+            lines,
+            search,
+            session,
+        } => snapshot::scrollback_cmd(lines, search.as_deref(), &session),
+        Commands::Perf { command } => match command {
+            PerfCommands::Start { session } => perf::start(&session),
+            PerfCommands::Stop { json, session } => perf::stop(json, &session),
+            PerfCommands::Fps {
+                during,
+                during_batch,
+                duration,
+                session,
+            } => perf::fps(during.as_deref(), during_batch, duration, &session),
+            PerfCommands::Latency {
+                key,
+                samples,
+                json,
+                session,
+            } => perf::latency(key.as_deref(), samples, json, &session),
+        },
+        Commands::Doctor => session::doctor(),
+        Commands::Init => session::init(),
+        Commands::TestMatrix {
+            command,
+            sizes,
+            terms,
+            colors,
+            test,
+        } => session::test_matrix(
+            &command,
+            sizes.as_deref(),
+            terms.as_deref(),
+            colors.as_deref(),
+            &test,
+        ),
+        Commands::A11yCheck { command } => session::a11y_check(&command),
+        Commands::Watch { interval, filter } => watch::run(interval, filter.as_deref()),
+        Commands::Record { command } => match command {
+            RecordCommands::Start {
+                session,
+                group,
+                label,
+                fps,
+                dir,
+            } => record::start(&session, &group, &label, fps, dir.as_deref()),
+            RecordCommands::Stop { session } => record::stop(&session),
+            RecordCommands::List { dir, json } => record::list(dir.as_deref(), json),
+            RecordCommands::View {
+                dir,
+                all_frames,
+                json,
+            } => record::view(&dir, all_frames, json),
+            RecordCommands::Poll {
+                session,
+                recording_dir,
+                fps,
+            } => record::poll(&session, &recording_dir, fps),
+        },
+        Commands::Web { dir, port } => web::serve(dir.as_deref(), port),
     };
 
     // Log action to recording if one is active for this session

@@ -43,7 +43,13 @@ fn test_nvim_edit_save_quit() {
     pause(300);
 
     // Verify the typed text appears
-    s.run_ok(&["wait", "--text", "Hello from agent-terminal", "--timeout", "5000"]);
+    s.run_ok(&[
+        "wait",
+        "--text",
+        "Hello from agent-terminal",
+        "--timeout",
+        "5000",
+    ]);
 
     let snap_after_type = s.run_ok(&["snapshot"]);
     eprintln!("=== AFTER TYPING SNAPSHOT ===\n{}", snap_after_type);
@@ -97,10 +103,7 @@ fn test_nvim_window_splits() {
     // The split should show a vertical divider (│) or at least two sets of ~ lines
     // nvim uses │ for window separators
     let has_divider = snap_split.contains('│') || snap_split.contains('|');
-    assert!(
-        has_divider,
-        "Snapshot should show a vertical split divider"
-    );
+    assert!(has_divider, "Snapshot should show a vertical split divider");
 
     // Navigate between windows: Ctrl+W then l (move right)
     s.run_ok(&["send", "C-w"]);
@@ -119,7 +122,10 @@ fn test_nvim_window_splits() {
 
     // Still should have the split
     let still_split = snap_after_nav.contains('│') || snap_after_nav.contains('|');
-    assert!(still_split, "Split should still be visible after navigation");
+    assert!(
+        still_split,
+        "Split should still be visible after navigation"
+    );
 
     // Quit all
     s.run_ok(&["type", ":qa!"]);
@@ -154,13 +160,9 @@ fn test_nvim_help_screen() {
     eprintln!("=== HELP SCREEN SNAPSHOT ===\n{}", snap_help);
 
     // Help should contain typical help text
-    let has_help_content = snap_help.contains("help.txt")
-        || snap_help.contains("VIM")
-        || snap_help.contains("NVIM");
-    assert!(
-        has_help_content,
-        "Help screen should show help content"
-    );
+    let has_help_content =
+        snap_help.contains("help.txt") || snap_help.contains("VIM") || snap_help.contains("NVIM");
+    assert!(has_help_content, "Help screen should show help content");
 
     // Close help window
     s.run_ok(&["type", ":q"]);

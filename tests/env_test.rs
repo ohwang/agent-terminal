@@ -10,7 +10,11 @@ fn test_open_with_size() {
     s.run_ok(&["wait", "--text", "Count:", "--timeout", "3000"]);
 
     let snap = s.run_ok(&["snapshot"]);
-    assert!(snap.contains("40x10"), "Snapshot should show 40x10 size: {}", snap);
+    assert!(
+        snap.contains("40x10"),
+        "Snapshot should show 40x10 size: {}",
+        snap
+    );
 }
 
 #[test]

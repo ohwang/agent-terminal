@@ -18,7 +18,9 @@ fn test_a11y_check_runs() {
 
     // Should run all checks and report results
     assert!(
-        combined.contains("NO_COLOR") || combined.contains("no.color") || combined.contains("nocolor"),
+        combined.contains("NO_COLOR")
+            || combined.contains("no.color")
+            || combined.contains("nocolor"),
         "Should check NO_COLOR: {}",
         combined
     );

@@ -224,8 +224,7 @@ fn test_combined_shell_and_no_stderr_interactive_bash() {
 
     // Session should still be alive because of --shell
     let status = s.run_ok(&["status", "--json"]);
-    let json: serde_json::Value =
-        serde_json::from_str(&status).expect("invalid JSON from status");
+    let json: serde_json::Value = serde_json::from_str(&status).expect("invalid JSON from status");
     assert_eq!(
         json["alive"], true,
         "Session should still be alive after inner bash exits due to --shell"

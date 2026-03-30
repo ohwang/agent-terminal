@@ -132,9 +132,15 @@ fn test_snapshot_scrollback() {
     // Capture with scrollback — should include more content than visible pane
     let snap = s.run_ok(&["snapshot", "--scrollback", "50"]);
     // Should contain the current frame
-    assert!(snap.contains("Frame:"), "Scrollback snapshot should contain Frame:");
+    assert!(
+        snap.contains("Frame:"),
+        "Scrollback snapshot should contain Frame:"
+    );
     // Plain snapshot mode includes the header
-    assert!(snap.contains("session:"), "Scrollback snapshot should have session header");
+    assert!(
+        snap.contains("session:"),
+        "Scrollback snapshot should have session header"
+    );
 
     // Compare to a snapshot without scrollback
     let plain = s.run_ok(&["snapshot"]);
