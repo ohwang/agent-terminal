@@ -196,7 +196,7 @@ async function ensureBinary() {
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
   const version = pkg.version;
 
-  const url = `https://github.com/anthropics/agent-terminal/releases/download/v${version}/${target}`;
+  const url = `https://github.com/ohwang/agent-terminal/releases/download/v${version}/${target}`;
 
   console.log(`agent-terminal: Downloading native binary for ${target}...`);
   console.log(`  ${url}`);
@@ -212,7 +212,7 @@ async function ensureBinary() {
     console.error("You can build from source instead:");
     console.error("");
     console.error(
-      "  git clone https://github.com/anthropics/agent-terminal.git"
+      "  git clone https://github.com/ohwang/agent-terminal.git"
     );
     console.error("  cd agent-terminal");
     console.error("  cargo build --release");

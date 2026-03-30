@@ -86,7 +86,7 @@ function main() {
     );
     console.error("");
     console.error(
-      "  git clone https://github.com/anthropics/agent-terminal.git"
+      "  git clone https://github.com/ohwang/agent-terminal.git"
     );
     console.error("  cd agent-terminal");
     console.error("  cargo build --release");

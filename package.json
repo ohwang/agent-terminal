@@ -14,9 +14,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anthropics/agent-terminal.git"
+    "url": "git+https://github.com/ohwang/agent-terminal.git"
   },
-  "homepage": "https://github.com/anthropics/agent-terminal",
+  "homepage": "https://github.com/ohwang/agent-terminal",
   "scripts": {
     "postinstall": "node scripts/postinstall.js"
   },
