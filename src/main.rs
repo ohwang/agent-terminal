@@ -839,7 +839,13 @@ fn main() {
             // wait already prints a snapshot on success, so already_printed=true
             // unless it's a hard wait (ms), which only prints "Waited Nms"
             let already_printed = ms.is_none();
-            run_post_captures(&session, None, capture.as_deref(), screenshot.as_deref(), already_printed)?;
+            run_post_captures(
+                &session,
+                None,
+                capture.as_deref(),
+                screenshot.as_deref(),
+                already_printed,
+            )?;
             Ok(())
         })(),
         Commands::Assert {
