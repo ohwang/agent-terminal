@@ -1,5 +1,9 @@
 # agent-terminal
 
+[![CI](https://github.com/anthropics/agent-terminal/actions/workflows/ci.yml/badge.svg)](https://github.com/anthropics/agent-terminal/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/agent-terminal.svg)](https://crates.io/crates/agent-terminal)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **End-to-end testing for terminal applications.** Launch any TUI, observe the screen, send input, and assert on the result — all from the command line.
 
 agent-terminal fills the gap that Playwright fills for web apps: automated, scriptable testing of interactive terminal interfaces. It works by running your app inside a tmux session and providing structured primitives for observation and interaction.
