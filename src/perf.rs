@@ -92,7 +92,8 @@ done
     );
 
     let script_file = format!("{}/{}-poller.sh", PERF_STATE_DIR, session);
-    fs::write(&script_file, &script).map_err(|e| format!("Failed to write poller script: {}", e))?;
+    fs::write(&script_file, &script)
+        .map_err(|e| format!("Failed to write poller script: {}", e))?;
 
     // Launch the background poller
     Command::new("sh")
@@ -158,7 +159,12 @@ pub fn stop(json: bool, session: &str) -> Result<(), String> {
 }
 
 /// Measure FPS during a command or for a duration.
-pub fn fps(during: Option<&str>, during_batch: bool, duration: Option<u64>, session: &str) -> Result<(), String> {
+pub fn fps(
+    during: Option<&str>,
+    during_batch: bool,
+    duration: Option<u64>,
+    session: &str,
+) -> Result<(), String> {
     if let Some(dur_ms) = duration {
         // Passive observation for N ms
         let frames = record_frames_for(session, dur_ms)?;
@@ -210,7 +216,10 @@ pub fn fps(during: Option<&str>, during_batch: bool, duration: Option<u64>, sess
                 if content != last_content {
                     let elapsed = start_time.elapsed().as_millis() as u64;
                     let frame_ms = frames.last().map(|f| elapsed - f.t_ms).unwrap_or(elapsed);
-                    frames.push(FrameEvent { t_ms: elapsed, frame_ms });
+                    frames.push(FrameEvent {
+                        t_ms: elapsed,
+                        frame_ms,
+                    });
                     last_content = content;
                 }
             }
@@ -225,10 +234,12 @@ pub fn fps(during: Option<&str>, during_batch: bool, duration: Option<u64>, sess
     if during_batch {
         // Read JSON batch from stdin
         let mut input = String::new();
-        io::stdin().read_to_string(&mut input).map_err(|e| format!("Failed to read stdin: {}", e))?;
+        io::stdin()
+            .read_to_string(&mut input)
+            .map_err(|e| format!("Failed to read stdin: {}", e))?;
 
-        let batch: Vec<serde_json::Value> = serde_json::from_str(&input)
-            .map_err(|e| format!("Invalid JSON batch: {}", e))?;
+        let batch: Vec<serde_json::Value> =
+            serde_json::from_str(&input).map_err(|e| format!("Invalid JSON batch: {}", e))?;
 
         let start_time = Instant::now();
         let mut frames = Vec::new();
@@ -251,8 +262,14 @@ pub fn fps(during: Option<&str>, during_batch: bool, duration: Option<u64>, sess
             if let Ok(content) = snapshot::capture_plain(session, None) {
                 if content != last_content {
                     let elapsed = start_time.elapsed().as_millis() as u64;
-                    let frame_ms = frames.last().map(|f: &FrameEvent| elapsed - f.t_ms).unwrap_or(elapsed);
-                    frames.push(FrameEvent { t_ms: elapsed, frame_ms });
+                    let frame_ms = frames
+                        .last()
+                        .map(|f: &FrameEvent| elapsed - f.t_ms)
+                        .unwrap_or(elapsed);
+                    frames.push(FrameEvent {
+                        t_ms: elapsed,
+                        frame_ms,
+                    });
                     last_content = content;
                 }
             }
@@ -269,7 +286,11 @@ pub fn fps(during: Option<&str>, during_batch: bool, duration: Option<u64>, sess
 /// Measure input latency.
 pub fn latency(key: Option<&str>, samples: u32, json: bool, session: &str) -> Result<(), String> {
     let test_key = key.unwrap_or("space");
-    let cancel_key = if test_key == "space" { Some("BSpace") } else { None };
+    let cancel_key = if test_key == "space" {
+        Some("BSpace")
+    } else {
+        None
+    };
 
     let mut measurements = Vec::new();
 
@@ -279,11 +300,7 @@ pub fn latency(key: Option<&str>, samples: u32, json: bool, session: &str) -> Re
             .map_err(|e| format!("Failed to capture before: {}", e))?;
 
         // Send the key
-        let target = if let Some(_) = None::<&str> {
-            session.to_string()
-        } else {
-            session.to_string()
-        };
+        let target = session.to_string();
 
         let _ = Command::new("tmux")
             .args(["send-keys", "-t", &target, test_key])
@@ -383,12 +400,11 @@ fn read_frame_data(path: &str) -> Vec<FrameEvent> {
     let mut frames = Vec::new();
 
     for line in reader.lines() {
-        if let Ok(line) = line {
-            if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
-                let t_ms = event["t_ms"].as_u64().unwrap_or(0);
-                let frame_ms = event["frame_ms"].as_u64().unwrap_or(0);
-                frames.push(FrameEvent { t_ms, frame_ms });
-            }
+        let Ok(line) = line else { break };
+        if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
+            let t_ms = event["t_ms"].as_u64().unwrap_or(0);
+            let frame_ms = event["frame_ms"].as_u64().unwrap_or(0);
+            frames.push(FrameEvent { t_ms, frame_ms });
         }
     }
 
@@ -405,8 +421,14 @@ fn record_frames_for(session: &str, duration_ms: u64) -> Result<Vec<FrameEvent>,
         if let Ok(content) = snapshot::capture_plain(session, None) {
             if content != last_content {
                 let elapsed = start.elapsed().as_millis() as u64;
-                let frame_ms = frames.last().map(|f: &FrameEvent| elapsed - f.t_ms).unwrap_or(elapsed);
-                frames.push(FrameEvent { t_ms: elapsed, frame_ms });
+                let frame_ms = frames
+                    .last()
+                    .map(|f: &FrameEvent| elapsed - f.t_ms)
+                    .unwrap_or(elapsed);
+                frames.push(FrameEvent {
+                    t_ms: elapsed,
+                    frame_ms,
+                });
                 last_content = content;
             }
         }
@@ -451,7 +473,7 @@ fn compute_fps_metrics(frames: &[FrameEvent]) -> FpsResult {
     };
 
     // Idle time = total duration - sum of frame times
-    let idle_ms = if duration_ms > sum { duration_ms - sum } else { 0 };
+    let idle_ms = duration_ms.saturating_sub(sum);
 
     let timeline: Vec<FrameEvent> = frames
         .iter()
@@ -485,8 +507,10 @@ fn output_fps_result(result: &FpsResult, json: bool) {
         println!("  FPS: {:.1}", result.fps);
         println!("  Frames: {}", result.frame_count);
         println!("  Duration: {}ms", result.duration_ms);
-        println!("  Frame time: min={}ms mean={:.1}ms max={}ms p95={}ms",
-                 result.min_frame_ms, result.mean_frame_ms, result.max_frame_ms, result.p95_frame_ms);
+        println!(
+            "  Frame time: min={}ms mean={:.1}ms max={}ms p95={}ms",
+            result.min_frame_ms, result.mean_frame_ms, result.max_frame_ms, result.p95_frame_ms
+        );
         println!("  Idle: {}ms", result.idle_ms);
 
         // Interpretation

@@ -46,13 +46,17 @@ fn list_recordings(base: &PathBuf) -> Vec<RecordingMeta> {
     if !base.exists() {
         return recordings;
     }
-    let Ok(entries) = fs::read_dir(base) else { return recordings };
+    let Ok(entries) = fs::read_dir(base) else {
+        return recordings;
+    };
     for group_entry in entries.flatten() {
         if !group_entry.path().is_dir() {
             continue;
         }
         let group_name = group_entry.file_name().to_string_lossy().to_string();
-        let Ok(rec_entries) = fs::read_dir(group_entry.path()) else { continue };
+        let Ok(rec_entries) = fs::read_dir(group_entry.path()) else {
+            continue;
+        };
         for rec_entry in rec_entries.flatten() {
             let meta_path = rec_entry.path().join("meta.json");
             if let Ok(meta_str) = fs::read_to_string(&meta_path) {
@@ -115,9 +119,15 @@ fn route(url: &str, base: &PathBuf) -> tiny_http::Response<std::io::Cursor<Vec<u
 }
 
 /// Serve a recording sub-file: /api/recording/{group}/{name}/{file}
-fn serve_recording_file(path: &str, base: &PathBuf) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
+fn serve_recording_file(
+    path: &str,
+    base: &std::path::Path,
+) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
     // Parse: /api/recording/{group}/{name}/{file_type}
-    let parts: Vec<&str> = path.trim_start_matches("/api/recording/").splitn(3, '/').collect();
+    let parts: Vec<&str> = path
+        .trim_start_matches("/api/recording/")
+        .splitn(3, '/')
+        .collect();
     if parts.len() < 3 {
         return serve_not_found();
     }
@@ -178,7 +188,10 @@ fn serve_html(content: &str) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
     serve_content(content, "text/html; charset=utf-8")
 }
 
-fn serve_content(content: &str, content_type: &str) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
+fn serve_content(
+    content: &str,
+    content_type: &str,
+) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
     let data = content.as_bytes().to_vec();
     let len = data.len();
     tiny_http::Response::new(

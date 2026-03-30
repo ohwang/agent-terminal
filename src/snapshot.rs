@@ -487,12 +487,19 @@ pub fn get_window_size(session: &str) -> Result<(u16, u16), String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = stdout.trim().split_whitespace().collect();
+    let parts: Vec<&str> = stdout.split_whitespace().collect();
     if parts.len() < 2 {
-        return Err(format!("Unexpected window size output: {:?}", stdout.trim()));
+        return Err(format!(
+            "Unexpected window size output: {:?}",
+            stdout.trim()
+        ));
     }
-    let cols = parts[0].parse::<u16>().map_err(|e| format!("Bad window_width: {}", e))?;
-    let rows = parts[1].parse::<u16>().map_err(|e| format!("Bad window_height: {}", e))?;
+    let cols = parts[0]
+        .parse::<u16>()
+        .map_err(|e| format!("Bad window_width: {}", e))?;
+    let rows = parts[1]
+        .parse::<u16>()
+        .map_err(|e| format!("Bad window_height: {}", e))?;
     Ok((cols, rows))
 }
 
@@ -532,7 +539,7 @@ pub fn get_pane_info(session: &str, pane: Option<&str>) -> Result<(u16, u16, u16
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = stdout.trim().split_whitespace().collect();
+    let parts: Vec<&str> = stdout.split_whitespace().collect();
     if parts.len() < 4 {
         return Err(format!(
             "Unexpected tmux display-message output: {:?}",
@@ -657,14 +664,7 @@ fn line_number_width(total: usize) -> usize {
 // Output modes
 // ---------------------------------------------------------------------------
 
-fn output_plain(
-    content: &str,
-    cols: u16,
-    rows: u16,
-    cx: u16,
-    cy: u16,
-    session: &str,
-) {
+fn output_plain(content: &str, cols: u16, rows: u16, cx: u16, cy: u16, session: &str) {
     let header = format_header(cols, rows, cx, cy, session);
     println!("{}", header);
     println!("{}", separator_line(header.len()));
@@ -678,14 +678,7 @@ fn output_plain(
     }
 }
 
-fn output_color(
-    ansi_content: &str,
-    cols: u16,
-    rows: u16,
-    cx: u16,
-    cy: u16,
-    session: &str,
-) {
+fn output_color(ansi_content: &str, cols: u16, rows: u16, cx: u16, cy: u16, session: &str) {
     let header = format_header(cols, rows, cx, cy, session);
     println!("{}", header);
     println!("{}", separator_line(header.len()));
@@ -717,14 +710,7 @@ fn output_raw(ansi_content: &str) {
     print!("{}", ansi_content);
 }
 
-fn output_ansi(
-    ansi_content: &str,
-    cols: u16,
-    rows: u16,
-    cx: u16,
-    cy: u16,
-    session: &str,
-) {
+fn output_ansi(ansi_content: &str, cols: u16, rows: u16, cx: u16, cy: u16, session: &str) {
     let header = format_header(cols, rows, cx, cy, session);
     println!("{}", header);
     println!("{}", separator_line(header.len()));
@@ -775,14 +761,7 @@ fn output_json(
     Ok(())
 }
 
-fn output_diff(
-    content: &str,
-    session: &str,
-    cols: u16,
-    rows: u16,
-    cx: u16,
-    cy: u16,
-) {
+fn output_diff(content: &str, session: &str, cols: u16, rows: u16, cx: u16, cy: u16) {
     let snapshot_path = format!("/tmp/agent-terminal-{}-last-snapshot", session);
     let header = format_header(cols, rows, cx, cy, session);
     println!("{}", header);
@@ -806,26 +785,11 @@ fn output_diff(
         if cur != prev {
             any_diff = true;
             if !prev.is_empty() {
-                println!(
-                    "-{:>width$}\u{2502} {}",
-                    i + 1,
-                    prev,
-                    width = width,
-                );
+                println!("-{:>width$}\u{2502} {}", i + 1, prev, width = width,);
             }
-            println!(
-                "+{:>width$}\u{2502} {}",
-                i + 1,
-                cur,
-                width = width,
-            );
+            println!("+{:>width$}\u{2502} {}", i + 1, cur, width = width,);
         } else {
-            println!(
-                " {:>width$}\u{2502} {}",
-                i + 1,
-                cur,
-                width = width,
-            );
+            println!(" {:>width$}\u{2502} {}", i + 1, cur, width = width,);
         }
     }
 
@@ -841,6 +805,7 @@ fn output_diff(
 // Public entry points
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 pub fn snapshot(
     session: &str,
     pane: Option<&str>,
@@ -1012,7 +977,10 @@ fn snapshot_window(
         // Output
         let header = format!(
             "[window: {}x{}  panes: {}  session: {}]",
-            win_cols, win_rows, panes.len(), session
+            win_cols,
+            win_rows,
+            panes.len(),
+            session
         );
         println!("{}", header);
         println!("{}", separator_line(header.len()));
@@ -1044,7 +1012,10 @@ fn snapshot_window(
 
         let header = format!(
             "[window: {}x{}  panes: {}  session: {}]",
-            win_cols, win_rows, panes.len(), session
+            win_cols,
+            win_rows,
+            panes.len(),
+            session
         );
         println!("{}", header);
         println!("{}", separator_line(header.len()));
@@ -1131,7 +1102,10 @@ fn output_window_json(
 
     let snapshot = WindowJsonSnapshot {
         session: session.to_string(),
-        window_size: Size { cols: win_cols, rows: win_rows },
+        window_size: Size {
+            cols: win_cols,
+            rows: win_rows,
+        },
         panes: entries,
     };
 
@@ -1213,17 +1187,18 @@ pub fn scrollback_cmd(
                 if ri > 0 {
                     println!("---");
                 }
-                for i in *start..*end {
-                    let marker = if all_lines[i].contains(pattern) {
-                        ">"
-                    } else {
-                        " "
-                    };
+                for (i, line) in all_lines
+                    .iter()
+                    .enumerate()
+                    .skip(*start)
+                    .take(*end - *start)
+                {
+                    let marker = if line.contains(pattern) { ">" } else { " " };
                     println!(
                         "{}{:>width$}\u{2502} {}",
                         marker,
                         i + 1,
-                        all_lines[i],
+                        line,
                         width = width,
                     );
                 }
@@ -1433,9 +1408,22 @@ mod tests {
     #[test]
     fn test_dominant_style() {
         let segments = vec![
-            ("hello".into(), Style { fg: Some("red".into()), bold: true, ..Style::default() }),
+            (
+                "hello".into(),
+                Style {
+                    fg: Some("red".into()),
+                    bold: true,
+                    ..Style::default()
+                },
+            ),
             ("  ".into(), Style::default()),
-            ("wo".into(), Style { fg: Some("blue".into()), ..Style::default() }),
+            (
+                "wo".into(),
+                Style {
+                    fg: Some("blue".into()),
+                    ..Style::default()
+                },
+            ),
         ];
         let dom = dominant_style(&segments);
         // "hello" has 5 non-whitespace chars with red+bold, "wo" has 2 with blue

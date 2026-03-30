@@ -19,7 +19,12 @@ fn tmux_cmd(args: &[&str]) -> Result<String, String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if stderr.contains("can't find") || stderr.contains("no server") {
-            return Err(format!("Session '{}' not found", args.iter().find(|a| !a.starts_with('-')).unwrap_or(&"unknown")));
+            return Err(format!(
+                "Session '{}' not found",
+                args.iter()
+                    .find(|a| !a.starts_with('-'))
+                    .unwrap_or(&"unknown")
+            ));
         }
         Err(format!("tmux error: {}", stderr))
     }
@@ -38,9 +43,13 @@ fn capture_ansi(session: &str) -> Result<String, String> {
 /// Get cursor position as (row, col), both 0-indexed from tmux.
 fn get_cursor_position(session: &str) -> Result<(u64, u64), String> {
     let output = tmux_cmd(&[
-        "display-message", "-t", session, "-p", "#{cursor_y} #{cursor_x}",
+        "display-message",
+        "-t",
+        session,
+        "-p",
+        "#{cursor_y} #{cursor_x}",
     ])?;
-    let parts: Vec<&str> = output.trim().split_whitespace().collect();
+    let parts: Vec<&str> = output.split_whitespace().collect();
     if parts.len() != 2 {
         return Err(format!("Unexpected cursor output: '{}'", output.trim()));
     }
@@ -57,12 +66,15 @@ fn get_cursor_position(session: &str) -> Result<(u64, u64), String> {
 fn session_diagnostics(session: &str) -> String {
     // Try to determine if the session is alive and get PID / runtime info.
     let pid_info = tmux_cmd(&[
-        "display-message", "-t", session, "-p",
+        "display-message",
+        "-t",
+        session,
+        "-p",
         "#{pane_pid} #{session_created}",
     ]);
     match pid_info {
         Ok(info) => {
-            let parts: Vec<&str> = info.trim().split_whitespace().collect();
+            let parts: Vec<&str> = info.split_whitespace().collect();
             if parts.len() >= 2 {
                 let pid = parts[0];
                 let created: u64 = parts[1].parse().unwrap_or(0);
@@ -78,7 +90,10 @@ fn session_diagnostics(session: &str) -> String {
                     .map(|o| o.status.success())
                     .unwrap_or(false);
                 let status = if alive { "alive" } else { "dead" };
-                format!("{} ({}, pid {}, runtime {}s)", session, status, pid, runtime)
+                format!(
+                    "{} ({}, pid {}, runtime {}s)",
+                    session, status, pid, runtime
+                )
             } else {
                 format!("{} (unknown state)", session)
             }
@@ -158,7 +173,10 @@ fn apply_sgr(style: &mut AnsiStyle, params: &[u64]) {
             7 => style.reverse = true,
             9 => style.strikethrough = true,
             21 => style.underline = true, // double underline, treat as underline
-            22 => { style.bold = false; style.dim = false; }
+            22 => {
+                style.bold = false;
+                style.dim = false;
+            }
             23 => style.italic = false,
             24 => style.underline = false,
             27 => style.reverse = false,
@@ -175,8 +193,12 @@ fn apply_sgr(style: &mut AnsiStyle, params: &[u64]) {
                         i += 2;
                     } else if params[i + 1] == 2 && i + 4 < params.len() {
                         // True color
-                        style.fg = Some(format!("#{:02x}{:02x}{:02x}",
-                            params[i + 2], params[i + 3], params[i + 4]));
+                        style.fg = Some(format!(
+                            "#{:02x}{:02x}{:02x}",
+                            params[i + 2],
+                            params[i + 3],
+                            params[i + 4]
+                        ));
                         i += 4;
                     }
                 }
@@ -192,8 +214,12 @@ fn apply_sgr(style: &mut AnsiStyle, params: &[u64]) {
                         style.bg = color_name(c).or_else(|| Some(format!("{}", c)));
                         i += 2;
                     } else if params[i + 1] == 2 && i + 4 < params.len() {
-                        style.bg = Some(format!("#{:02x}{:02x}{:02x}",
-                            params[i + 2], params[i + 3], params[i + 4]));
+                        style.bg = Some(format!(
+                            "#{:02x}{:02x}{:02x}",
+                            params[i + 2],
+                            params[i + 3],
+                            params[i + 4]
+                        ));
                         i += 4;
                     }
                 }
@@ -342,12 +368,24 @@ fn style_matches(actual: &AnsiStyle, required: &AnsiStyle) -> bool {
 /// Wait for screen stability and print the snapshot.
 /// Used by `type --wait-stable` and `send --wait-stable`.
 pub fn wait_stable_only(stable_ms: u64, session: &str) -> Result<(), String> {
-    wait(None, None, None, Some(stable_ms), None, None, false, session, 10_000, 50)
+    wait(
+        None,
+        None,
+        None,
+        Some(stable_ms),
+        None,
+        None,
+        false,
+        session,
+        10_000,
+        50,
+    )
 }
 
 /// Poll-based wait system. Exactly one condition should be active.
 ///
 /// Returns Ok(()) on success, Err with diagnostic message on timeout or error.
+#[allow(clippy::too_many_arguments)]
 pub fn wait(
     ms: Option<u64>,
     text: Option<&str>,
@@ -369,24 +407,36 @@ pub fn wait(
 
     // 2. Wait for text to appear
     if let Some(target_text) = text {
-        return wait_poll(session, timeout, interval, &format!("--text \"{}\"", target_text), |snapshot| {
-            if snapshot.contains(target_text) {
-                Some(Ok(()))
-            } else {
-                None
-            }
-        });
+        return wait_poll(
+            session,
+            timeout,
+            interval,
+            &format!("--text \"{}\"", target_text),
+            |snapshot| {
+                if snapshot.contains(target_text) {
+                    Some(Ok(()))
+                } else {
+                    None
+                }
+            },
+        );
     }
 
     // 3. Wait for text to disappear
     if let Some(gone_text) = text_gone {
-        return wait_poll(session, timeout, interval, &format!("--text-gone \"{}\"", gone_text), |snapshot| {
-            if !snapshot.contains(gone_text) {
-                Some(Ok(()))
-            } else {
-                None
-            }
-        });
+        return wait_poll(
+            session,
+            timeout,
+            interval,
+            &format!("--text-gone \"{}\"", gone_text),
+            |snapshot| {
+                if !snapshot.contains(gone_text) {
+                    Some(Ok(()))
+                } else {
+                    None
+                }
+            },
+        );
     }
 
     // 4. Wait for screen stability
@@ -472,16 +522,21 @@ pub fn wait(
 
     // 6. Wait for regex match
     if let Some(pattern) = regex {
-        let re = Regex::new(pattern)
-            .map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
+        let re = Regex::new(pattern).map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
 
-        return wait_poll(session, timeout, interval, &format!("--regex \"{}\"", pattern), |snapshot| {
-            if re.is_match(snapshot) {
-                Some(Ok(()))
-            } else {
-                None
-            }
-        });
+        return wait_poll(
+            session,
+            timeout,
+            interval,
+            &format!("--regex \"{}\"", pattern),
+            |snapshot| {
+                if re.is_match(snapshot) {
+                    Some(Ok(()))
+                } else {
+                    None
+                }
+            },
+        );
     }
 
     // 7. Wait for process exit
@@ -490,9 +545,7 @@ pub fn wait(
 
         loop {
             // Check if the pane's process is still alive by querying tmux.
-            let alive = tmux_cmd(&[
-                "display-message", "-t", session, "-p", "#{pane_dead}",
-            ]);
+            let alive = tmux_cmd(&["display-message", "-t", session, "-p", "#{pane_dead}"]);
 
             match alive {
                 Ok(output) => {
@@ -575,6 +628,7 @@ where
 
 /// Assertion commands. Each checks a condition and returns Ok(()) on pass,
 /// Err on fail (which causes the CLI to exit with code 1).
+#[allow(clippy::too_many_arguments)]
 pub fn assert_cmd(
     text: Option<&str>,
     no_text: Option<&str>,
@@ -613,7 +667,12 @@ pub fn assert_cmd(
             let mut locations = Vec::new();
             for (i, line) in snapshot.lines().enumerate() {
                 if let Some(col) = line.find(absent) {
-                    locations.push(format!("  row {}, col {}: \"{}\"", i + 1, col + 1, line.trim()));
+                    locations.push(format!(
+                        "  row {}, col {}: \"{}\"",
+                        i + 1,
+                        col + 1,
+                        line.trim()
+                    ));
                 }
             }
             return Err(format!(
@@ -699,7 +758,9 @@ pub fn assert_cmd(
         let required = parse_style_spec(expected_style_str);
 
         // Check if any span on this row matches the required style.
-        let has_match = spans.iter().any(|s| !s.text.trim().is_empty() && style_matches(&s.style, &required));
+        let has_match = spans
+            .iter()
+            .any(|s| !s.text.trim().is_empty() && style_matches(&s.style, &required));
 
         if has_match {
             println!("PASS: row {} has style \"{}\"", row_num, expected_style_str);
@@ -749,11 +810,12 @@ pub fn assert_cmd(
                     let span_end = char_pos + span.text.len();
 
                     // Check if this span overlaps with our target text range.
-                    if span_start < text_end && span_end > abs_pos {
-                        if !style_matches(&span.style, &required) {
-                            all_match = false;
-                            break;
-                        }
+                    if span_start < text_end
+                        && span_end > abs_pos
+                        && !style_matches(&span.style, &required)
+                    {
+                        all_match = false;
+                        break;
                     }
                     char_pos = span_end;
                 }
@@ -761,7 +823,9 @@ pub fn assert_cmd(
                 if all_match {
                     println!(
                         "PASS: text \"{}\" has style \"{}\" (row {})",
-                        target_text, expected_style_str, line_idx + 1
+                        target_text,
+                        expected_style_str,
+                        line_idx + 1
                     );
                     return Ok(());
                 }
@@ -811,8 +875,7 @@ pub fn find(
     let snapshot = capture_plain(session)?;
 
     if regex {
-        let re = Regex::new(pattern)
-            .map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
+        let re = Regex::new(pattern).map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
 
         let mut matches = Vec::new();
         for (line_idx, line) in snapshot.lines().enumerate() {
@@ -939,11 +1002,7 @@ fn find_by_color(
 /// Extract context around a match for display.
 fn extract_context(line: &str, match_start: usize, match_end: usize) -> String {
     let context_chars = 20;
-    let start = if match_start > context_chars {
-        match_start - context_chars
-    } else {
-        0
-    };
+    let start = match_start.saturating_sub(context_chars);
     let end = std::cmp::min(line.len(), match_end + context_chars);
 
     let mut result = String::new();

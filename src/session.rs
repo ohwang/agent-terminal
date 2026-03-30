@@ -150,13 +150,7 @@ fn rich_error(session: &str, pane: Option<&str>, message: &str) -> String {
 
 /// Get session creation time as a unix timestamp.
 fn session_created_ts(session: &str) -> Result<u64, String> {
-    let out = tmux_cmd(&[
-        "display-message",
-        "-t",
-        session,
-        "-p",
-        "#{session_created}",
-    ])?;
+    let out = tmux_cmd(&["display-message", "-t", session, "-p", "#{session_created}"])?;
     out.trim()
         .parse::<u64>()
         .map_err(|e| format!("Cannot parse session_created: {e}"))
@@ -201,14 +195,10 @@ pub fn open(
         }
     } else if shell {
         // Capture stderr but keep session alive after command exits.
-        format!(
-            "{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}; exec $SHELL"
-        )
+        format!("{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}; exec $SHELL")
     } else {
         // Default: capture stderr and exit code.
-        format!(
-            "{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}"
-        )
+        format!("{env_prefix}{command} 2>{stderr_file}; echo $? > {exit_file}")
     };
 
     if let Some(pane_name) = pane {
@@ -218,13 +208,7 @@ pub fn open(
                 "Session '{session}' does not exist; cannot split pane"
             ));
         }
-        tmux_cmd(&[
-            "split-window",
-            "-t",
-            session,
-            "-h",
-            &wrapped,
-        ])?;
+        tmux_cmd(&["split-window", "-t", session, "-h", &wrapped])?;
         // Optionally rename the pane — tmux doesn't have native pane naming,
         // but we can use select-pane -T.
         let target = target_pane(session, Some(pane_name));
@@ -287,8 +271,8 @@ pub fn open(
 
     // Report the actual terminal size (may differ from requested if tmux adjusted)
     let target_final = target_pane(session, pane);
-    let (actual_cols, actual_rows, _, _) = crate::snapshot::get_pane_info(session, Some(&target_final))
-        .unwrap_or((0, 0, 0, 0));
+    let (actual_cols, actual_rows, _, _) =
+        crate::snapshot::get_pane_info(session, Some(&target_final)).unwrap_or((0, 0, 0, 0));
     println!("session={session} size={actual_cols}x{actual_rows} command={command}");
     Ok(())
 }
@@ -322,7 +306,10 @@ pub fn list() -> Result<(), String> {
                 println!("No active tmux sessions.");
                 return Ok(());
             }
-            println!("{:<30} {:<24} {:<10} {}", "SESSION", "CREATED", "WINDOWS", "PANES");
+            println!(
+                "{:<30} {:<24} {:<10} PANES",
+                "SESSION", "CREATED", "WINDOWS"
+            );
             for line in text.trim().lines() {
                 let parts: Vec<&str> = line.splitn(3, ' ').collect();
                 if parts.len() < 3 {
@@ -349,7 +336,10 @@ pub fn list() -> Result<(), String> {
                     "unknown".to_string()
                 };
 
-                println!("{:<30} {:<24} {:<10} {}{}", name, created_str, windows, pane_count, tag);
+                println!(
+                    "{:<30} {:<24} {:<10} {}{}",
+                    name, created_str, windows, pane_count, tag
+                );
             }
             Ok(())
         }
@@ -374,7 +364,11 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
             );
             return Ok(());
         }
-        return Err(rich_error(session, pane, &format!("Session '{session}' does not exist")));
+        return Err(rich_error(
+            session,
+            pane,
+            &format!("Session '{session}' does not exist"),
+        ));
     }
 
     let pid = get_pane_pid(session, pane)?;
@@ -442,7 +436,9 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
                     p.pane_id, p.width, p.height, p.left, p.top, p.title
                 );
             }
-            println!("Hint:     use --window to capture all panes, or --pane <id> for a specific one");
+            println!(
+                "Hint:     use --window to capture all panes, or --pane <id> for a specific one"
+            );
         }
     }
 
@@ -506,14 +502,7 @@ pub fn logs(session: &str, stderr_only: bool) -> Result<(), String> {
     println!("\n=== STDOUT (scrollback) ===");
     if session_exists(session) {
         let target = target_pane(session, None);
-        match tmux_cmd(&[
-            "capture-pane",
-            "-t",
-            &target,
-            "-p",
-            "-S",
-            "-1000",
-        ]) {
+        match tmux_cmd(&["capture-pane", "-t", &target, "-p", "-S", "-1000"]) {
             Ok(scrollback) => {
                 if scrollback.trim().is_empty() {
                     println!("(empty)");
@@ -867,11 +856,7 @@ pub fn test_matrix(
     for size in &sizes_list {
         for term in &terms_list {
             for color in &colors_list {
-                matrix.push(MatrixEntry {
-                    size,
-                    term,
-                    color,
-                });
+                matrix.push(MatrixEntry { size, term, color });
             }
         }
     }
@@ -908,7 +893,15 @@ pub fn test_matrix(
         }
 
         // Open session.
-        let open_result = open(command, &session_name, None, &envs, Some(entry.size), false, false);
+        let open_result = open(
+            command,
+            &session_name,
+            None,
+            &envs,
+            Some(entry.size),
+            false,
+            false,
+        );
         if let Err(e) = open_result {
             results.push(MatrixResult {
                 label: label.clone(),
@@ -923,7 +916,7 @@ pub fn test_matrix(
 
         // Check if the process is alive.
         let alive = get_pane_pid(&session_name, None)
-            .map(|pid| is_pid_alive(pid))
+            .map(is_pid_alive)
             .unwrap_or(false);
 
         if !alive {
@@ -959,10 +952,28 @@ pub fn test_matrix(
             // (starts with a known subcommand name), prefix with our binary path and
             // the session flag. Otherwise run as-is through sh -c.
             let at_subcommands = [
-                "open", "close", "list", "status", "exit-code", "logs",
-                "snapshot", "send", "type", "paste", "resize", "click",
-                "drag", "scroll-wheel", "wait", "assert", "find",
-                "screenshot", "signal", "clipboard", "scrollback", "perf",
+                "open",
+                "close",
+                "list",
+                "status",
+                "exit-code",
+                "logs",
+                "snapshot",
+                "send",
+                "type",
+                "paste",
+                "resize",
+                "click",
+                "drag",
+                "scroll-wheel",
+                "wait",
+                "assert",
+                "find",
+                "screenshot",
+                "signal",
+                "clipboard",
+                "scrollback",
+                "perf",
             ];
             let first_word = test_cmd.split_whitespace().next().unwrap_or("");
             let expanded = if at_subcommands.contains(&first_word) {
@@ -973,9 +984,7 @@ pub fn test_matrix(
             } else {
                 test_cmd.replace("{session}", &session_name)
             };
-            let output = Command::new("sh")
-                .args(["-c", &expanded])
-                .output();
+            let output = Command::new("sh").args(["-c", &expanded]).output();
 
             match output {
                 Ok(out) if !out.status.success() => {
@@ -1017,7 +1026,7 @@ pub fn test_matrix(
 
     // Print results table.
     println!();
-    println!("{:<40} {}", "COMBINATION", "RESULT");
+    println!("{:<40} RESULT", "COMBINATION");
     println!("{}", "-".repeat(60));
 
     let mut pass_count = 0;
@@ -1042,9 +1051,7 @@ pub fn test_matrix(
     }
 
     println!();
-    println!(
-        "{pass_count}/{total} passed, {fail_count} failed"
-    );
+    println!("{pass_count}/{total} passed, {fail_count} failed");
     if fail_count > 0 {
         println!("Failure snapshots saved to: ./agent-terminal-matrix/");
     }
@@ -1068,29 +1075,26 @@ pub fn a11y_check(command: &str) -> Result<(), String> {
     let total_checks = 5;
 
     // Helper: start a session with given envs/size, wait, capture, close.
-    let run_with_env = |session: &str,
-                        envs: &[String],
-                        size: &str|
-     -> Result<(String, String, bool), String> {
-        // Clean up any prior session with this name.
-        if session_exists(session) {
-            let _ = close(session);
-        }
+    let run_with_env =
+        |session: &str, envs: &[String], size: &str| -> Result<(String, String, bool), String> {
+            // Clean up any prior session with this name.
+            if session_exists(session) {
+                let _ = close(session);
+            }
 
-        open(command, session, None, envs, Some(size), false, false)?;
-        thread::sleep(Duration::from_millis(1000));
+            open(command, session, None, envs, Some(size), false, false)?;
+            thread::sleep(Duration::from_millis(1000));
 
-        let alive = get_pane_pid(session, None)
-            .map(|pid| is_pid_alive(pid))
-            .unwrap_or(false);
+            let alive = get_pane_pid(session, None)
+                .map(is_pid_alive)
+                .unwrap_or(false);
 
-        let raw_snap = tmux_cmd(&["capture-pane", "-t", session, "-p", "-e"])
-            .unwrap_or_default();
-        let plain_snap = tmux_cmd(&["capture-pane", "-t", session, "-p"])
-            .unwrap_or_default();
+            let raw_snap =
+                tmux_cmd(&["capture-pane", "-t", session, "-p", "-e"]).unwrap_or_default();
+            let plain_snap = tmux_cmd(&["capture-pane", "-t", session, "-p"]).unwrap_or_default();
 
-        Ok((raw_snap, plain_snap, alive))
-    };
+            Ok((raw_snap, plain_snap, alive))
+        };
 
     // --- Check 1: NO_COLOR ---
     print!("NO_COLOR respected ......... ");
@@ -1106,18 +1110,17 @@ pub fn a11y_check(command: &str) -> Result<(), String> {
                 } else {
                     // Check for ANSI color escape sequences (CSI ... m with color params).
                     // ESC [ ... m  where the params contain color codes (30-37, 40-47, 38, 48, 90-97, etc.)
-                    let has_ansi_colors = raw_snap.contains("\x1b[")
-                        && {
-                            // Look for SGR sequences that set colors.
-                            let re = regex::Regex::new(r"\x1b\[\d*(;\d+)*m").unwrap();
-                            // Filter out pure resets (ESC[0m, ESC[m) and check for actual color codes.
-                            let found = re.find_iter(&raw_snap).any(|m| {
-                                let s = m.as_str();
-                                // Pure reset codes are fine.
-                                s != "\x1b[m" && s != "\x1b[0m" && s != "\x1b[00m"
-                            });
-                            found
-                        };
+                    let has_ansi_colors = raw_snap.contains("\x1b[") && {
+                        // Look for SGR sequences that set colors.
+                        let re = regex::Regex::new(r"\x1b\[\d*(;\d+)*m").unwrap();
+                        // Filter out pure resets (ESC[0m, ESC[m) and check for actual color codes.
+                        let found = re.find_iter(&raw_snap).any(|m| {
+                            let s = m.as_str();
+                            // Pure reset codes are fine.
+                            s != "\x1b[m" && s != "\x1b[0m" && s != "\x1b[00m"
+                        });
+                        found
+                    };
 
                     if has_ansi_colors {
                         println!("\u{2717} (ANSI color codes present despite NO_COLOR=1)");
@@ -1182,7 +1185,7 @@ pub fn a11y_check(command: &str) -> Result<(), String> {
                     } else {
                         thread::sleep(Duration::from_millis(500));
                         let still_alive = get_pane_pid(session, None)
-                            .map(|pid| is_pid_alive(pid))
+                            .map(is_pid_alive)
                             .unwrap_or(false);
 
                         if still_alive {
@@ -1190,8 +1193,7 @@ pub fn a11y_check(command: &str) -> Result<(), String> {
                             checks_passed += 1;
                         } else {
                             println!("\u{2717} (process crashed after resize to 40x10)");
-                            let snap =
-                                try_capture_snapshot(session, None).unwrap_or_default();
+                            let snap = try_capture_snapshot(session, None).unwrap_or_default();
                             let _ = fs::write(report_dir.join("resize-crash.txt"), &snap);
                             checks_failed += 1;
                         }

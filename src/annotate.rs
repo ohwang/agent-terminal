@@ -1,6 +1,6 @@
-use std::fs;
-use ab_glyph::{Font as AbGlyphFont, FontVec, PxScale, ScaleFont, point};
 use crate::snapshot;
+use ab_glyph::{point, Font as AbGlyphFont, FontVec, PxScale, ScaleFont};
+use std::fs;
 
 /// Noto Sans Mono (SIL OFL) — bundled for reliable Unicode coverage in PNG screenshots.
 static EMBEDDED_FONT: &[u8] = include_bytes!("fonts/NotoSansMono-Regular.ttf");
@@ -33,14 +33,31 @@ pub fn screenshot(
     if html {
         let default_path = default_screenshot_path(session, "html");
         let output_path = path.unwrap_or(&default_path);
-        let html_content = render_html(&ansi_content, cols, rows, cursor_x, cursor_y, annotate, theme);
+        let html_content = render_html(
+            &ansi_content,
+            cols,
+            rows,
+            cursor_x,
+            cursor_y,
+            annotate,
+            theme,
+        );
         fs::write(output_path, &html_content)
             .map_err(|e| format!("Failed to write HTML: {}", e))?;
         println!("Screenshot saved to {}", output_path);
     } else {
         let default_path = default_screenshot_path(session, "png");
         let output_path = path.unwrap_or(&default_path);
-        render_png(&ansi_content, cols, rows, cursor_x, cursor_y, annotate, theme, output_path)?;
+        render_png(
+            &ansi_content,
+            cols,
+            rows,
+            cursor_x,
+            cursor_y,
+            annotate,
+            theme,
+            output_path,
+        )?;
         println!("Screenshot saved to {}", output_path);
     }
 
@@ -126,7 +143,9 @@ fn render_window_html(
     html.push_str("<meta charset=\"utf-8\">\n");
     html.push_str(&format!(
         "<title>agent-terminal window screenshot ({}x{}, {} panes)</title>\n",
-        win_cols, win_rows, pane_data.len()
+        win_cols,
+        win_rows,
+        pane_data.len()
     ));
     html.push_str("<style>\n");
     html.push_str(&format!(
@@ -176,7 +195,9 @@ fn render_window_html(
 
     html.push_str(&format!(
         "<div class=\"title-bar\">agent-terminal window — {}x{} — {} panes</div>\n",
-        win_cols, win_rows, pane_data.len()
+        win_cols,
+        win_rows,
+        pane_data.len()
     ));
 
     let content_top = 28.0; // title bar height
@@ -196,6 +217,7 @@ fn render_window_html(
     }
 
     // Draw vertical separators
+    #[allow(clippy::needless_range_loop)]
     for col in 0..win_cols as usize {
         let mut in_sep = false;
         let mut sep_start = 0;
@@ -229,7 +251,8 @@ fn render_window_html(
         if annotate {
             html.push_str(&format!(
                 "<div class=\"pane-label\" style=\"left:{:.1}px;top:{:.1}px;\">{}{}</div>\n",
-                x, y - 14.0,
+                x,
+                y - 14.0,
                 pd.layout.pane_id,
                 if pd.layout.active { " *" } else { "" }
             ));
@@ -242,7 +265,13 @@ fn render_window_html(
 
         let lines: Vec<&str> = pd.ansi_content.lines().collect();
         for (i, line) in lines.iter().enumerate() {
-            let html_line = ansi_line_to_html(line, &color_map, i, pd.cursor_x as usize, pd.cursor_y as usize);
+            let html_line = ansi_line_to_html(
+                line,
+                &color_map,
+                i,
+                pd.cursor_x as usize,
+                pd.cursor_y as usize,
+            );
             html.push_str(&html_line);
             html.push('\n');
         }
@@ -292,11 +321,8 @@ fn render_window_png(
 
     let separator_color = (80u8, 80u8, 80u8);
 
-    let mut imgbuf = image::RgbaImage::from_pixel(
-        img_width,
-        img_height,
-        image::Rgba([bg_r, bg_g, bg_b, 255]),
-    );
+    let mut imgbuf =
+        image::RgbaImage::from_pixel(img_width, img_height, image::Rgba([bg_r, bg_g, bg_b, 255]));
 
     // Draw title bar
     for y in 0..title_bar_height {
@@ -319,6 +345,7 @@ fn render_window_png(
         }
     }
 
+    #[allow(clippy::needless_range_loop)]
     for row in 0..win_rows as usize {
         for col in 0..win_cols as usize {
             if !pane_mask[row][col] {
@@ -328,7 +355,16 @@ fn render_window_png(
                 let mid_x = px_x + cell_width / 2;
                 for dy in 0..cell_height {
                     if mid_x < img_width && px_y + dy < img_height {
-                        imgbuf.put_pixel(mid_x, px_y + dy, image::Rgba([separator_color.0, separator_color.1, separator_color.2, 255]));
+                        imgbuf.put_pixel(
+                            mid_x,
+                            px_y + dy,
+                            image::Rgba([
+                                separator_color.0,
+                                separator_color.1,
+                                separator_color.2,
+                                255,
+                            ]),
+                        );
                     }
                 }
             }
@@ -350,7 +386,7 @@ fn render_window_png(
 
             if annotate && line_idx == 0 {
                 // Draw pane ID label
-                let label = format!("{}", p.pane_id);
+                let label = p.pane_id.to_string();
                 for (i, ch) in label.chars().enumerate() {
                     let gx = pane_x + (i as u32 * cell_width);
                     // Small label in top-right area would overlap; just skip for PNG
@@ -374,7 +410,17 @@ fn render_window_png(
                 }
 
                 if cell.ch != ' ' {
-                    draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg, cell_width, cell_height);
+                    draw_glyph(
+                        &mut imgbuf,
+                        &font,
+                        cell.ch,
+                        scale,
+                        cx as f32,
+                        baseline_y,
+                        cell.fg,
+                        cell_width,
+                        cell_height,
+                    );
                 }
             }
 
@@ -494,14 +540,12 @@ fn render_html(
     let lines: Vec<&str> = ansi_content.lines().collect();
     for (i, line) in lines.iter().enumerate() {
         if annotate {
-            html.push_str(&format!(
-                "<span class=\"row-num\">{:>3}│</span>",
-                i + 1
-            ));
+            html.push_str(&format!("<span class=\"row-num\">{:>3}│</span>", i + 1));
         }
 
         // Parse ANSI in this line and convert to HTML spans
-        let html_line = ansi_line_to_html(line, &color_map, i, cursor_x as usize, cursor_y as usize);
+        let html_line =
+            ansi_line_to_html(line, &color_map, i, cursor_x as usize, cursor_y as usize);
         html.push_str(&html_line);
         html.push('\n');
     }
@@ -511,7 +555,13 @@ fn render_html(
 }
 
 /// Convert a single ANSI line to HTML spans.
-fn ansi_line_to_html(line: &str, color_map: &AnsiColorMap, row: usize, cursor_x: usize, cursor_y: usize) -> String {
+fn ansi_line_to_html(
+    line: &str,
+    color_map: &AnsiColorMap,
+    row: usize,
+    cursor_x: usize,
+    cursor_y: usize,
+) -> String {
     let mut result = String::new();
     let mut chars = line.chars().peekable();
     let mut current_style = StyleState::default();
@@ -546,7 +596,7 @@ fn ansi_line_to_html(line: &str, color_map: &AnsiColorMap, row: usize, cursor_x:
                 }
             }
         } else {
-            let is_cursor = row == cursor_y as usize && col == cursor_x as usize;
+            let is_cursor = row == cursor_y && col == cursor_x;
             if is_cursor {
                 result.push_str("<span class=\"cursor\">");
             }
@@ -579,7 +629,11 @@ struct ColoredCell {
 }
 
 /// Parse an ANSI line into colored cells, resolving all SGR sequences.
-fn parse_ansi_line_to_cells(line: &str, default_fg: (u8, u8, u8), style: &mut StyleState) -> Vec<ColoredCell> {
+fn parse_ansi_line_to_cells(
+    line: &str,
+    default_fg: (u8, u8, u8),
+    style: &mut StyleState,
+) -> Vec<ColoredCell> {
     let mut cells = Vec::new();
     let mut chars = line.chars().peekable();
 
@@ -634,7 +688,10 @@ fn load_font() -> Result<FontVec, String> {
         ("/System/Library/Fonts/Supplemental/Courier New.ttf", None),
         // Linux
         ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", None),
-        ("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", None),
+        (
+            "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+            None,
+        ),
         ("/usr/share/fonts/TTF/DejaVuSansMono.ttf", None),
         ("/usr/share/fonts/truetype/freefont/FreeMono.ttf", None),
         // Windows
@@ -656,11 +713,15 @@ fn load_font() -> Result<FontVec, String> {
         }
     }
 
-    Err("No monospace font found. Bundled font failed to parse, and no system fonts available.".into())
+    Err(
+        "No monospace font found. Bundled font failed to parse, and no system fonts available."
+            .into(),
+    )
 }
 
 /// Draw a single glyph onto the image with alpha blending.
 /// When the font lacks a glyph, draws a tofu box (rectangular outline) as a visible placeholder.
+#[allow(clippy::too_many_arguments)]
 fn draw_glyph(
     img: &mut image::RgbaImage,
     font: &FontVec,
@@ -700,7 +761,14 @@ fn draw_glyph(
         });
     } else {
         // Missing glyph — draw a tofu box (1px rectangular outline) as a visible placeholder
-        draw_tofu_box(img, x as u32, baseline_y as u32 - cell_height + cell_height / 4, cell_width, cell_height * 3 / 4, color);
+        draw_tofu_box(
+            img,
+            x as u32,
+            baseline_y as u32 - cell_height + cell_height / 4,
+            cell_width,
+            cell_height * 3 / 4,
+            color,
+        );
     }
 }
 
@@ -749,6 +817,7 @@ fn draw_tofu_box(
 }
 
 /// Render terminal content as PNG using ab_glyph for real font rendering.
+#[allow(clippy::too_many_arguments)]
 fn render_png(
     ansi_content: &str,
     cols: u16,
@@ -791,11 +860,8 @@ fn render_png(
         (212u8, 212u8, 212u8)
     };
 
-    let mut imgbuf = image::RgbaImage::from_pixel(
-        img_width,
-        img_height,
-        image::Rgba([bg_r, bg_g, bg_b, 255]),
-    );
+    let mut imgbuf =
+        image::RgbaImage::from_pixel(img_width, img_height, image::Rgba([bg_r, bg_g, bg_b, 255]));
 
     // Draw title bar background
     for y in 0..title_bar_height {
@@ -820,7 +886,17 @@ fn render_png(
             let num_str = format!("{:>3}|", line_idx + 1);
             for (i, ch) in num_str.chars().enumerate() {
                 let gx = padding + (i as u32 * cell_width);
-                draw_glyph(&mut imgbuf, &font, ch, scale, gx as f32, baseline_y, gutter_color, cell_width, cell_height);
+                draw_glyph(
+                    &mut imgbuf,
+                    &font,
+                    ch,
+                    scale,
+                    gx as f32,
+                    baseline_y,
+                    gutter_color,
+                    cell_width,
+                    cell_height,
+                );
             }
         }
 
@@ -844,7 +920,17 @@ fn render_png(
 
             // Draw the character glyph
             if cell.ch != ' ' {
-                draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg, cell_width, cell_height);
+                draw_glyph(
+                    &mut imgbuf,
+                    &font,
+                    cell.ch,
+                    scale,
+                    cx as f32,
+                    baseline_y,
+                    cell.fg,
+                    cell_width,
+                    cell_height,
+                );
             }
         }
 
@@ -873,7 +959,6 @@ fn render_png(
 
     Ok(())
 }
-
 
 // --- Style tracking for HTML rendering ---
 
@@ -907,10 +992,7 @@ impl StyleState {
             return;
         }
 
-        let nums: Vec<u32> = params
-            .split(';')
-            .filter_map(|s| s.parse().ok())
-            .collect();
+        let nums: Vec<u32> = params.split(';').filter_map(|s| s.parse().ok()).collect();
 
         let mut i = 0;
         while i < nums.len() {
@@ -922,7 +1004,10 @@ impl StyleState {
                 4 => self.underline = true,
                 7 => self.reverse = true,
                 9 => self.strikethrough = true,
-                22 => { self.bold = false; self.dim = false; }
+                22 => {
+                    self.bold = false;
+                    self.dim = false;
+                }
                 23 => self.italic = false,
                 24 => self.underline = false,
                 27 => self.reverse = false,
@@ -1022,27 +1107,27 @@ impl AnsiColorMap {
 fn ansi_basic_color(idx: u32) -> (u8, u8, u8) {
     match idx {
         0 => (0, 0, 0),       // black
-        1 => (205, 49, 49),    // red
-        2 => (13, 188, 121),   // green
-        3 => (229, 229, 16),   // yellow
-        4 => (36, 114, 200),   // blue
-        5 => (188, 63, 188),   // magenta
-        6 => (17, 168, 205),   // cyan
-        7 => (229, 229, 229),  // white
+        1 => (205, 49, 49),   // red
+        2 => (13, 188, 121),  // green
+        3 => (229, 229, 16),  // yellow
+        4 => (36, 114, 200),  // blue
+        5 => (188, 63, 188),  // magenta
+        6 => (17, 168, 205),  // cyan
+        7 => (229, 229, 229), // white
         _ => (229, 229, 229),
     }
 }
 
 fn ansi_bright_color(idx: u32) -> (u8, u8, u8) {
     match idx {
-        0 => (102, 102, 102),  // bright black
-        1 => (241, 76, 76),    // bright red
-        2 => (35, 209, 139),   // bright green
-        3 => (245, 245, 67),   // bright yellow
-        4 => (59, 142, 234),   // bright blue
-        5 => (214, 112, 214),  // bright magenta
-        6 => (41, 184, 219),   // bright cyan
-        7 => (255, 255, 255),  // bright white
+        0 => (102, 102, 102), // bright black
+        1 => (241, 76, 76),   // bright red
+        2 => (35, 209, 139),  // bright green
+        3 => (245, 245, 67),  // bright yellow
+        4 => (59, 142, 234),  // bright blue
+        5 => (214, 112, 214), // bright magenta
+        6 => (41, 184, 219),  // bright cyan
+        7 => (255, 255, 255), // bright white
         _ => (255, 255, 255),
     }
 }
