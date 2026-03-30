@@ -63,10 +63,10 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `snapshot [--session s] [--pane p] [--window] [--color] [--raw] [--ansi] [--json] [--diff] [--scrollback N]` | Capture current terminal content. `--window` composites all panes in their layout positions. |
+| `snapshot [--session s] [--pane p] [--window] [--color] [--raw] [--ansi] [--json] [--diff] [--scrollback N]` | Capture current terminal content. `--window` composites all panes in their layout positions. `--json` includes `panes` array and `pane_id` for multi-pane sessions. |
 | `screenshot [--session s] [--window] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render as PNG or HTML. `--window` composites all panes. Default: `<session>-<timestamp>.png` |
 | `scrollback [--session s] [--lines N] [--search "text"]` | Read the tmux scrollback buffer |
-| `find "pattern" [--session s] [--all] [--regex] [--color "style"]` | Search screen for text, return row,col |
+| `find "pattern" [--session s] [--all] [--regex] [--color "style"] [--json]` | Search screen for text. `--json` returns `{matches: [{row, col, text, style?}]}`. Style included with `--color`. |
 
 ### Interaction
 
@@ -86,6 +86,7 @@ All commands default to `--session agent-terminal` if not specified.
 |---------|-------------|
 | `wait <ms>` | Hard wait (last resort) |
 | `wait --text "str" [--timeout ms] [--interval ms]` | Poll until text appears on screen |
+| `wait --text-any "str1" "str2" ...` | Poll until any of the texts appears (OR semantics). Conflicts with `--text`. |
 | `wait --text-gone "str"` | Poll until text disappears |
 | `wait --stable <ms>` | Poll until screen unchanged for N ms |
 | `wait --cursor <row,col>` | Poll until cursor reaches position |
@@ -95,6 +96,8 @@ All commands default to `--session agent-terminal` if not specified.
 Default timeout: 10000ms. Default poll interval: 50ms.
 
 All `wait` conditions also accept `--capture [path]` and `--screenshot [path]` to save text/PNG after the condition is met.
+
+All `wait` conditions accept `--json` for structured timeout errors: `{error, condition, elapsed_ms, timeout_ms, last_snapshot, session}`. For `--stable`, also includes `last_stable_duration_ms` and `change_count`.
 
 ### Assertion
 
@@ -111,7 +114,7 @@ All `wait` conditions also accept `--capture [path]` and `--screenshot [path]` t
 
 | Command | Description |
 |---------|-------------|
-| `status [--session s] [--pane p] [--json]` | Process status. Shows pane layout when multiple panes exist (pane IDs, sizes, positions). JSON includes `panes` array. |
+| `status [--session s] [--pane p] [--json]` | Process status. Shows pane layout when multiple panes exist (pane IDs, sizes, positions). JSON includes `panes` array and `last_stderr` when process is dead. |
 | `exit-code [--session s]` | Get the exit code of the terminated process |
 | `logs [--session s] [--stderr]` | Read captured stderr/stdout |
 | `signal <SIG> [--session s]` | Send a Unix signal (SIGINT, SIGTERM, SIGWINCH, etc.) |
@@ -150,13 +153,18 @@ All `wait` conditions also accept `--capture [path]` and `--screenshot [path]` t
 **Snapshot shows nothing / stale content:**
 ```bash
 agent-terminal status --session s1 --json
-# If alive=false: check logs and exit code
-agent-terminal logs --stderr --session s1
+# If alive=false: last_stderr is included in JSON -- no separate logs call needed
 # If alive=true: app may still be loading
 agent-terminal wait --stable 1000 --session s1 --timeout 15000
 ```
 
-**wait timed out:** The error includes the last snapshot. Common causes: wrong expected text, animation/spinner (use longer `--stable`), or app crashed (check `status`).
+**wait timed out:** The error includes the last snapshot. Use `--json` for structured diagnostics (elapsed_ms, change_count). Common causes: wrong expected text, animation/spinner (use longer `--stable`), or app crashed (check `status`).
+
+**Branching outcomes (success vs error):**
+```bash
+# Wait for either success or error message in one call
+agent-terminal wait --text-any "Success" "Error:" "Failed" --session s1
+```
 
 **Session already exists:** `agent-terminal close --session s1` then re-open.
 

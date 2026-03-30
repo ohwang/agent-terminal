@@ -21,17 +21,17 @@ agent-terminal close --session demo
 | `open "<cmd>"` | Launch in tmux session |
 | `close` | Kill session |
 | `list` | List active sessions |
-| `status [--json]` | PID, alive/dead, exit code, runtime |
+| `status [--json]` | PID, alive/dead, exit code, runtime. JSON includes `last_stderr` when dead |
 
 ### Observe
 | Command | Purpose |
 |---|---|
 | `snapshot` | Plain text with row numbers |
 | `snapshot --color` | Text + style annotations (`[fg:red bold]`) |
-| `snapshot --json` | Structured JSON with color spans |
+| `snapshot --json` | Structured JSON with color spans (includes pane layout for multi-pane sessions) |
 | `snapshot --diff` | Diff against previous snapshot |
 | `screenshot [--html]` | PNG or HTML rendering |
-| `find "text"` | Search screen, return row,col |
+| `find "text" [--json]` | Search screen, return row,col. `--json` returns `{matches: [{row, col, text, style?}]}` |
 
 ### Interact
 | Command | Purpose |
@@ -47,6 +47,7 @@ agent-terminal close --session demo
 | Command | Purpose |
 |---|---|
 | `wait --text "str"` | Poll until text appears. Chain: `--capture`, `--screenshot` |
+| `wait --text-any "a" "b"` | Poll until any of the texts appears (OR semantics) |
 | `wait --stable <ms>` | Poll until screen stops changing |
 | `wait --regex "pat"` | Poll until regex matches |
 | `assert --text "str"` | Exit 0 if present, 1 with snapshot if not |
@@ -104,8 +105,11 @@ agent-terminal test-matrix \
 Designed for the agent loop: `snapshot → reason → act → wait → repeat`.
 
 Install `SKILL.md` as a Claude Code skill for full command reference, failure recovery, and framework-specific tips. Key features:
-- `status --json` detects crashes so agents read `logs --stderr` instead of retrying blindly
-- `--json` snapshots give parseable screen state with color spans
+- `status --json` detects crashes and includes `last_stderr` so agents don't need separate calls
+- `--json` snapshots give parseable screen state with color spans and pane layout
+- `find --json` returns structured matches with row, col, text, and style
+- `wait --text-any` handles branching flows (success OR error) in one call
+- `wait --json` returns structured timeout errors with diagnostics (elapsed, change count)
 - Failed `wait` includes the last screen state in the error, saving a round-trip
 
 ## Install

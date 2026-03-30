@@ -20,10 +20,11 @@ Binary: `target/debug/agent-terminal` (or `target/release/agent-terminal`)
 ```
 src/
   main.rs        # CLI entrypoint (clap), dispatches to modules
+  ansi.rs        # shared ANSI parser: Style, Span, Line, parse_ansi, style matching
   session.rs     # tmux session lifecycle (open/close/list/status/doctor/init/test-matrix/a11y-check)
-  snapshot.rs    # capture-pane + ANSI parser (plain/color/raw/ansi/json/diff)
+  snapshot.rs    # capture-pane + output formatting (plain/color/raw/ansi/json/diff)
   interact.rs    # send-keys, type, paste, resize, mouse, signals, clipboard
-  wait.rs        # poll-based wait, assert, find (has its own ANSI parser — see note below)
+  wait.rs        # poll-based wait, assert, find
   annotate.rs    # screenshot rendering (PNG via image crate, HTML)
   perf.rs        # FPS measurement (start/stop + inline) and latency probes
 
@@ -41,7 +42,7 @@ SKILL.md         # Claude Code skill definition — the main AI prompt
 
 - **tmux is the runtime dependency.** All commands ultimately call `tmux` via `std::process::Command`. No PTY handling in-process.
 - **Session isolation.** Each session uses temp files at `/tmp/agent-terminal-<session>-{stderr,exit}` for process health tracking.
-- **ANSI parsing is duplicated.** Both `snapshot.rs` and `wait.rs` have independent ANSI parsers. This happened during parallel development. A future refactor could unify them — `snapshot.rs` has the canonical, more complete parser.
+- **ANSI parsing is shared.** The `ansi.rs` module contains the canonical ANSI parser (Style, Span, parse_ansi, parse_ansi_line) used by `snapshot.rs`, `wait.rs`, and `watch.rs`. The `annotate.rs` module still has its own renderer-specific parser that resolves to RGB tuples.
 - **Screenshot rendering is basic.** The PNG renderer uses a simple block-character approach rather than real font rasterization via `ab_glyph`. The HTML renderer is the higher-quality path. `ab_glyph` is a dependency but not fully wired up for glyph rendering yet.
 - **Perf start/stop** spawns a shell script as a background process that polls capture-pane. The PID is tracked in `/tmp/agent-terminal-perf/`.
 
@@ -64,4 +65,4 @@ Fixture binaries are built automatically as part of the workspace. They live in 
 
 - **Add a new subcommand**: Add variant to `Commands` enum in `main.rs`, implement in the appropriate module, add integration test.
 - **Add a test fixture**: Create `tests/fixtures/src/bin/foo_app.rs`, add `[[bin]]` entry to `tests/fixtures/Cargo.toml`.
-- **Fix ANSI parsing**: The canonical parser is in `snapshot.rs` (`parse_ansi`, `parse_ansi_line`). The one in `wait.rs` should eventually be replaced with calls to `snapshot.rs`.
+- **Fix ANSI parsing**: The canonical parser is in `ansi.rs` (`parse_ansi`, `parse_ansi_line`). The renderer-specific parser in `annotate.rs` resolves to RGB tuples and is separate by design.
