@@ -307,6 +307,9 @@ enum Commands {
         /// Find by color
         #[arg(long)]
         color: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
         /// Session name
         #[arg(long, default_value = "agent-terminal")]
         session: String,
@@ -877,8 +880,9 @@ fn main() {
             all,
             regex,
             color,
+            json,
             session,
-        } => wait::find(&pattern, all, regex, color.as_deref(), &session),
+        } => wait::find(&pattern, all, regex, color.as_deref(), json, &session),
         Commands::Screenshot {
             path,
             annotate,

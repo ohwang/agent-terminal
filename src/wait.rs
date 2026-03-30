@@ -609,17 +609,33 @@ pub fn assert_cmd(
 // Find
 // ---------------------------------------------------------------------------
 
+/// A single match result for JSON output.
+#[derive(serde::Serialize)]
+struct FindMatch {
+    row: usize,
+    col: usize,
+    text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    style: Option<ansi::Style>,
+}
+
+#[derive(serde::Serialize)]
+struct FindResult {
+    matches: Vec<FindMatch>,
+}
+
 /// Search the screen content for text, with optional regex and color filtering.
 pub fn find(
     pattern: &str,
     all: bool,
     regex: bool,
     color: Option<&str>,
+    json: bool,
     session: &str,
 ) -> Result<(), String> {
     // Color-based search requires ANSI capture
     if let Some(color_spec) = color {
-        return find_by_color(pattern, color_spec, all, regex, session);
+        return find_by_color(pattern, color_spec, all, regex, json, session);
     }
 
     let snapshot = capture_plain(session)?;
@@ -627,58 +643,126 @@ pub fn find(
     if regex {
         let re = Regex::new(pattern).map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
 
-        let mut matches = Vec::new();
+        let mut matches: Vec<FindMatch> = Vec::new();
         for (line_idx, line) in snapshot.lines().enumerate() {
             for mat in re.find_iter(line) {
-                let context = extract_context(line, mat.start(), mat.end());
-                matches.push(format!(
-                    "row {}, col {}: \"{}\"",
-                    line_idx + 1,
-                    mat.start() + 1,
-                    context,
-                ));
+                matches.push(FindMatch {
+                    row: line_idx + 1,
+                    col: mat.start() + 1,
+                    text: mat.as_str().to_string(),
+                    style: None,
+                });
                 if !all {
-                    println!("Found at {}", matches[0]);
-                    return Ok(());
+                    break;
                 }
+            }
+            if !all && !matches.is_empty() {
+                break;
             }
         }
 
         if matches.is_empty() {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&FindResult { matches }).unwrap()
+                );
+            }
             return Err(format!("Pattern /{}/ not found", pattern));
         }
-        for m in &matches {
-            println!("{}", m);
+
+        if json {
+            let result = if all {
+                matches
+            } else {
+                vec![matches.remove(0)]
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&FindResult { matches: result }).unwrap()
+            );
+        } else {
+            if !all {
+                println!(
+                    "Found at row {}, col {}: \"{}\"",
+                    matches[0].row,
+                    matches[0].col,
+                    extract_context_for_match(&snapshot, &matches[0])
+                );
+            } else {
+                for m in &matches {
+                    println!(
+                        "row {}, col {}: \"{}\"",
+                        m.row,
+                        m.col,
+                        extract_context_for_match(&snapshot, m)
+                    );
+                }
+            }
         }
         return Ok(());
     }
 
     // Literal text search
-    let mut matches = Vec::new();
+    let mut matches: Vec<FindMatch> = Vec::new();
     for (line_idx, line) in snapshot.lines().enumerate() {
         let mut start = 0;
         while let Some(pos) = line[start..].find(pattern) {
             let abs_pos = start + pos;
-            let context = extract_context(line, abs_pos, abs_pos + pattern.len());
-            matches.push(format!(
-                "row {}, col {}: \"{}\"",
-                line_idx + 1,
-                abs_pos + 1,
-                context,
-            ));
+            matches.push(FindMatch {
+                row: line_idx + 1,
+                col: abs_pos + 1,
+                text: pattern.to_string(),
+                style: None,
+            });
             if !all {
-                println!("Found at {}", matches[0]);
-                return Ok(());
+                break;
             }
             start = abs_pos + 1;
+        }
+        if !all && !matches.is_empty() {
+            break;
         }
     }
 
     if matches.is_empty() {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&FindResult { matches }).unwrap()
+            );
+        }
         return Err(format!("Text \"{}\" not found", pattern));
     }
-    for m in &matches {
-        println!("{}", m);
+
+    if json {
+        let result = if all {
+            matches
+        } else {
+            vec![matches.remove(0)]
+        };
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&FindResult { matches: result }).unwrap()
+        );
+    } else {
+        if !all {
+            println!(
+                "Found at row {}, col {}: \"{}\"",
+                matches[0].row,
+                matches[0].col,
+                extract_context_for_match(&snapshot, &matches[0])
+            );
+        } else {
+            for m in &matches {
+                println!(
+                    "row {}, col {}: \"{}\"",
+                    m.row,
+                    m.col,
+                    extract_context_for_match(&snapshot, m)
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -689,6 +773,7 @@ fn find_by_color(
     color_spec: &str,
     all: bool,
     regex: bool,
+    json: bool,
     session: &str,
 ) -> Result<(), String> {
     let ansi_content = capture_ansi(session)?;
@@ -699,7 +784,7 @@ fn find_by_color(
         None
     };
 
-    let mut matches = Vec::new();
+    let mut matches: Vec<FindMatch> = Vec::new();
 
     for (line_idx, line) in ansi_content.lines().enumerate() {
         let (plain, spans) = ansi::parse_ansi_line(line);
@@ -713,7 +798,6 @@ fn find_by_color(
                 continue;
             }
 
-            // Check if the span text matches the pattern.
             let text_matches = if let Some(ref re) = re {
                 re.is_match(text)
             } else {
@@ -721,21 +805,29 @@ fn find_by_color(
             };
 
             if text_matches {
-                matches.push(format!(
-                    "row {}, col {}: \"{}\"",
-                    line_idx + 1,
-                    span.start + 1,
-                    text.trim(),
-                ));
+                matches.push(FindMatch {
+                    row: line_idx + 1,
+                    col: span.start + 1,
+                    text: text.trim().to_string(),
+                    style: Some(span.style.clone()),
+                });
                 if !all {
-                    println!("Found at {}", matches[0]);
-                    return Ok(());
+                    break;
                 }
             }
+        }
+        if !all && !matches.is_empty() {
+            break;
         }
     }
 
     if matches.is_empty() {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&FindResult { matches }).unwrap()
+            );
+        }
         if pattern.is_empty() {
             return Err(format!("No text with style \"{}\" found", color_spec));
         }
@@ -744,10 +836,40 @@ fn find_by_color(
             pattern, color_spec
         ));
     }
-    for m in &matches {
-        println!("{}", m);
+
+    if json {
+        let result = if all {
+            matches
+        } else {
+            vec![matches.remove(0)]
+        };
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&FindResult { matches: result }).unwrap()
+        );
+    } else {
+        if !all {
+            println!(
+                "Found at row {}, col {}: \"{}\"",
+                matches[0].row, matches[0].col, matches[0].text
+            );
+        } else {
+            for m in &matches {
+                println!("row {}, col {}: \"{}\"", m.row, m.col, m.text);
+            }
+        }
     }
     Ok(())
+}
+
+/// Helper to get context string for a plain-text find match.
+fn extract_context_for_match(snapshot: &str, m: &FindMatch) -> String {
+    if let Some(line) = snapshot.lines().nth(m.row - 1) {
+        let col = m.col - 1;
+        extract_context(line, col, col + m.text.len())
+    } else {
+        m.text.clone()
+    }
 }
 
 /// Extract context around a match for display.
