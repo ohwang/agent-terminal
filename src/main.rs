@@ -230,6 +230,9 @@ enum Commands {
         /// Wait until text appears
         #[arg(long)]
         text: Option<String>,
+        /// Wait until any of the specified texts appears (OR semantics)
+        #[arg(long = "text-any", num_args = 1.., conflicts_with = "text")]
+        text_any: Vec<String>,
         /// Wait until text disappears
         #[arg(long = "text-gone")]
         text_gone: Option<String>,
@@ -595,6 +598,7 @@ fn extract_command_info(cmd: &Commands) -> Option<(String, String, Vec<String>)>
         Commands::Wait {
             session,
             text,
+            text_any,
             text_gone,
             stable,
             cursor,
@@ -605,6 +609,11 @@ fn extract_command_info(cmd: &Commands) -> Option<(String, String, Vec<String>)>
             let mut args = Vec::new();
             if let Some(t) = text {
                 args.push(format!("--text {}", t));
+            }
+            if !text_any.is_empty() {
+                for t in text_any {
+                    args.push(format!("--text-any {}", t));
+                }
             }
             if let Some(t) = text_gone {
                 args.push(format!("--text-gone {}", t));
@@ -817,6 +826,7 @@ fn main() {
         Commands::Wait {
             ms,
             text,
+            text_any,
             text_gone,
             stable,
             cursor,
@@ -831,6 +841,7 @@ fn main() {
             wait::wait(
                 ms,
                 text.as_deref(),
+                &text_any,
                 text_gone.as_deref(),
                 stable,
                 cursor.as_deref(),

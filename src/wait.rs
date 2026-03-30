@@ -123,6 +123,7 @@ pub fn wait_stable_only(stable_ms: u64, session: &str) -> Result<(), String> {
     wait(
         None,
         None,
+        &[],
         None,
         Some(stable_ms),
         None,
@@ -141,6 +142,7 @@ pub fn wait_stable_only(stable_ms: u64, session: &str) -> Result<(), String> {
 pub fn wait(
     ms: Option<u64>,
     text: Option<&str>,
+    text_any: &[String],
     text_gone: Option<&str>,
     stable: Option<u64>,
     cursor: Option<&str>,
@@ -170,6 +172,25 @@ pub fn wait(
                 } else {
                     None
                 }
+            },
+        );
+    }
+
+    // 2b. Wait for any of multiple texts to appear (OR semantics)
+    if !text_any.is_empty() {
+        let text_any_owned: Vec<String> = text_any.to_vec();
+        return wait_poll(
+            session,
+            timeout,
+            interval,
+            &format!("--text-any {:?}", text_any),
+            |snapshot| {
+                for t in &text_any_owned {
+                    if snapshot.contains(t.as_str()) {
+                        return Some(Ok(()));
+                    }
+                }
+                None
             },
         );
     }
@@ -327,7 +348,7 @@ pub fn wait(
         }
     }
 
-    Err("No wait condition specified. Use one of: <ms>, --text, --text-gone, --stable, --cursor, --regex, --exit".to_string())
+    Err("No wait condition specified. Use one of: <ms>, --text, --text-any, --text-gone, --stable, --cursor, --regex, --exit".to_string())
 }
 
 /// Generic poll loop for wait conditions that check snapshot content.
