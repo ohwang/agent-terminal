@@ -2,6 +2,9 @@ use std::fs;
 use ab_glyph::{Font as AbGlyphFont, FontVec, PxScale, ScaleFont, point};
 use crate::snapshot;
 
+/// Noto Sans Mono (SIL OFL) — bundled for reliable Unicode coverage in PNG screenshots.
+static EMBEDDED_FONT: &[u8] = include_bytes!("fonts/NotoSansMono-Regular.ttf");
+
 fn default_screenshot_path(session: &str, ext: &str) -> String {
     let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
     format!("{}-{}.{}", session, ts, ext)
@@ -371,7 +374,7 @@ fn render_window_png(
                 }
 
                 if cell.ch != ' ' {
-                    draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg);
+                    draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg, cell_width, cell_height);
                 }
             }
 
@@ -616,8 +619,14 @@ fn parse_ansi_line_to_cells(line: &str, default_fg: (u8, u8, u8), style: &mut St
     cells
 }
 
-/// Load a monospace font from the system.
+/// Load a monospace font — tries the bundled Noto Sans Mono first, then system fonts.
 fn load_font() -> Result<FontVec, String> {
+    // 1. Try embedded Noto Sans Mono (bundled, works everywhere)
+    if let Ok(font) = FontVec::try_from_vec(EMBEDDED_FONT.to_vec()) {
+        return Ok(font);
+    }
+
+    // 2. Fallback: system fonts
     let candidates: &[(&str, Option<u32>)] = &[
         // macOS
         ("/System/Library/Fonts/Menlo.ttc", Some(0)),
@@ -647,10 +656,11 @@ fn load_font() -> Result<FontVec, String> {
         }
     }
 
-    Err("No monospace font found. Searched: Menlo (macOS), DejaVu Sans Mono (Linux), Consolas (Windows)".into())
+    Err("No monospace font found. Bundled font failed to parse, and no system fonts available.".into())
 }
 
 /// Draw a single glyph onto the image with alpha blending.
+/// When the font lacks a glyph, draws a tofu box (rectangular outline) as a visible placeholder.
 fn draw_glyph(
     img: &mut image::RgbaImage,
     font: &FontVec,
@@ -659,6 +669,8 @@ fn draw_glyph(
     x: f32,
     baseline_y: f32,
     color: (u8, u8, u8),
+    cell_width: u32,
+    cell_height: u32,
 ) {
     let glyph_id = font.glyph_id(ch);
     let glyph = glyph_id.with_scale_and_position(scale, point(x, baseline_y));
@@ -686,6 +698,53 @@ fn draw_glyph(
                 img.put_pixel(px, py, image::Rgba([blended_r, blended_g, blended_b, 255]));
             }
         });
+    } else {
+        // Missing glyph — draw a tofu box (1px rectangular outline) as a visible placeholder
+        draw_tofu_box(img, x as u32, baseline_y as u32 - cell_height + cell_height / 4, cell_width, cell_height * 3 / 4, color);
+    }
+}
+
+/// Draw a 1px rectangular outline (tofu box) to indicate a missing glyph.
+fn draw_tofu_box(
+    img: &mut image::RgbaImage,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    color: (u8, u8, u8),
+) {
+    let (r, g, b) = color;
+    let pixel = image::Rgba([r, g, b, 255]);
+    let img_w = img.width();
+    let img_h = img.height();
+
+    // Inset by 1px on left/right so adjacent tofu boxes don't merge
+    let x0 = x + 1;
+    let x1 = (x + width).saturating_sub(1);
+    let y0 = y;
+    let y1 = y + height;
+
+    // Top and bottom edges
+    for px in x0..x1 {
+        if px < img_w {
+            if y0 < img_h {
+                img.put_pixel(px, y0, pixel);
+            }
+            if y1 < img_h {
+                img.put_pixel(px, y1, pixel);
+            }
+        }
+    }
+    // Left and right edges
+    for py in y0..=y1 {
+        if py < img_h {
+            if x0 < img_w {
+                img.put_pixel(x0, py, pixel);
+            }
+            if x1 < img_w {
+                img.put_pixel(x1, py, pixel);
+            }
+        }
     }
 }
 
@@ -761,7 +820,7 @@ fn render_png(
             let num_str = format!("{:>3}|", line_idx + 1);
             for (i, ch) in num_str.chars().enumerate() {
                 let gx = padding + (i as u32 * cell_width);
-                draw_glyph(&mut imgbuf, &font, ch, scale, gx as f32, baseline_y, gutter_color);
+                draw_glyph(&mut imgbuf, &font, ch, scale, gx as f32, baseline_y, gutter_color, cell_width, cell_height);
             }
         }
 
@@ -785,7 +844,7 @@ fn render_png(
 
             // Draw the character glyph
             if cell.ch != ' ' {
-                draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg);
+                draw_glyph(&mut imgbuf, &font, cell.ch, scale, cx as f32, baseline_y, cell.fg, cell_width, cell_height);
             }
         }
 
