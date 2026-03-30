@@ -747,12 +747,12 @@ fn draw_glyph(
             let px = rx + bx;
             let py = ry + by;
             if px < img_w && py < img_h {
-                let alpha = (coverage * 255.0) as u16;
+                let alpha = (coverage.clamp(0.0, 1.0) * 255.0) as u16;
                 if alpha == 0 {
                     return;
                 }
                 let bg = img.get_pixel(px, py);
-                let inv = 255 - alpha;
+                let inv = 255u16.saturating_sub(alpha);
                 let blended_r = ((r as u16 * alpha + bg[0] as u16 * inv) / 255) as u8;
                 let blended_g = ((g as u16 * alpha + bg[1] as u16 * inv) / 255) as u8;
                 let blended_b = ((b as u16 * alpha + bg[2] as u16 * inv) / 255) as u8;
