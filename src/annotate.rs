@@ -2,6 +2,11 @@ use std::fs;
 use ab_glyph::{Font as AbGlyphFont, FontVec, PxScale, ScaleFont, point};
 use crate::snapshot;
 
+fn default_screenshot_path(session: &str, ext: &str) -> String {
+    let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    format!("{}-{}.{}", session, ts, ext)
+}
+
 /// Render a terminal screenshot as PNG or HTML.
 pub fn screenshot(
     path: Option<&str>,
@@ -18,13 +23,15 @@ pub fn screenshot(
         .map_err(|e| format!("Failed to get pane info: {}", e))?;
 
     if html {
-        let output_path = path.unwrap_or("screenshot.html");
+        let default_path = default_screenshot_path(session, "html");
+        let output_path = path.unwrap_or(&default_path);
         let html_content = render_html(&ansi_content, cols, rows, cursor_x, cursor_y, annotate, theme);
         fs::write(output_path, &html_content)
             .map_err(|e| format!("Failed to write HTML: {}", e))?;
         println!("Screenshot saved to {}", output_path);
     } else {
-        let output_path = path.unwrap_or("screenshot.png");
+        let default_path = default_screenshot_path(session, "png");
+        let output_path = path.unwrap_or(&default_path);
         render_png(&ansi_content, cols, rows, cursor_x, cursor_y, annotate, theme, output_path)?;
         println!("Screenshot saved to {}", output_path);
     }

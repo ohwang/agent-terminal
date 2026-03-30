@@ -284,7 +284,11 @@ pub fn open(
         thread::sleep(Duration::from_millis(50));
     }
 
-    println!("{session}");
+    // Report the actual terminal size (may differ from requested if tmux adjusted)
+    let target_final = target_pane(session, pane);
+    let (actual_cols, actual_rows, _, _) = crate::snapshot::get_pane_info(session, Some(&target_final))
+        .unwrap_or((0, 0, 0, 0));
+    println!("session={session} size={actual_cols}x{actual_rows} command={command}");
     Ok(())
 }
 
