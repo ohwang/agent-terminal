@@ -6,10 +6,6 @@ use std::fs;
 use std::thread;
 use std::time::Duration;
 
-/// We use `nvim --clean` to avoid user configuration (LazyVim, etc.)
-/// and get predictable vanilla nvim behavior.
-const NVIM: &str = "/opt/homebrew/bin/nvim --clean";
-
 /// Helper: short sleep to let nvim process keystrokes
 fn pause(ms: u64) {
     thread::sleep(Duration::from_millis(ms));
@@ -17,13 +13,14 @@ fn pause(ms: u64) {
 
 #[test]
 fn test_nvim_edit_save_quit() {
+    let nvim = require_binary!("nvim");
     let tmp_file = format!("/tmp/agent-terminal-nvim-test-{}.txt", std::process::id());
 
     // Create an empty temp file
     fs::write(&tmp_file, "").expect("failed to create temp file");
 
     let s = Session::new();
-    let cmd = format!("{} {}", NVIM, tmp_file);
+    let cmd = format!("{} --clean {}", nvim, tmp_file);
     s.run_ok(&["open", &cmd]);
 
     // Wait for nvim to load — vanilla nvim shows ~ on empty lines
@@ -83,8 +80,10 @@ fn test_nvim_edit_save_quit() {
 
 #[test]
 fn test_nvim_window_splits() {
+    let nvim = require_binary!("nvim");
+    let nvim_cmd = format!("{} --clean", nvim);
     let s = Session::new();
-    s.run_ok(&["open", NVIM]);
+    s.run_ok(&["open", &nvim_cmd]);
 
     // Wait for nvim to load — vanilla nvim shows ~ on empty lines
     s.run_ok(&["wait", "--text", "~", "--timeout", "8000"]);
@@ -136,8 +135,10 @@ fn test_nvim_window_splits() {
 
 #[test]
 fn test_nvim_help_screen() {
+    let nvim = require_binary!("nvim");
+    let nvim_cmd = format!("{} --clean", nvim);
     let s = Session::new();
-    s.run_ok(&["open", NVIM]);
+    s.run_ok(&["open", &nvim_cmd]);
 
     // Wait for nvim to load
     s.run_ok(&["wait", "--text", "~", "--timeout", "8000"]);

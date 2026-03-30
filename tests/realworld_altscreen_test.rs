@@ -33,31 +33,7 @@ fn open_bash_with_prompt(s: &Session) {
 /// Requires nvim to be installed — skipped if not found.
 #[test]
 fn test_nested_altscreen_nvim_help() {
-    // Find nvim: check common paths, then fall back to PATH lookup
-    let nvim_path = [
-        "/opt/homebrew/bin/nvim",
-        "/usr/local/bin/nvim",
-        "/usr/bin/nvim",
-    ]
-    .iter()
-    .find(|p| std::path::Path::new(p).exists())
-    .map(|p| p.to_string())
-    .or_else(|| {
-        std::process::Command::new("which")
-            .arg("nvim")
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-    });
-
-    let nvim_path = match nvim_path {
-        Some(p) => p,
-        None => {
-            eprintln!("nvim not found, skipping test_nested_altscreen_nvim_help");
-            return;
-        }
-    };
+    let nvim_path = require_binary!("nvim");
 
     let s = Session::new();
     s.run_ok(&["open", &nvim_path]);

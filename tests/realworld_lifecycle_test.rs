@@ -176,7 +176,8 @@ fn test_multi_pane_bash_and_python() {
     open_bash_and_wait(&s, false);
 
     // Split to create second pane with python3
-    s.run_ok(&["open", "/opt/homebrew/bin/python3", "--pane", "second"]);
+    let python3 = require_binary!("python3");
+    s.run_ok(&["open", &python3, "--pane", "second"]);
 
     // Wait for python to start (python prompt goes to stdout, should be visible)
     sleep_ms(1000);

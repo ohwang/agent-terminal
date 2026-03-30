@@ -96,6 +96,42 @@ impl Session {
     }
 }
 
+/// Find a binary by name, checking common paths then PATH.
+/// Returns None if not found (tests should skip).
+pub fn find_binary(name: &str) -> Option<String> {
+    let candidates = [
+        format!("/opt/homebrew/bin/{}", name),
+        format!("/usr/local/bin/{}", name),
+        format!("/usr/bin/{}", name),
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return Some(path.clone());
+        }
+    }
+    // Fall back to PATH lookup
+    Command::new("which")
+        .arg(name)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+/// Find a binary or skip the test with a message.
+#[macro_export]
+macro_rules! require_binary {
+    ($name:expr) => {
+        match common::find_binary($name) {
+            Some(path) => path,
+            None => {
+                eprintln!("Skipping: {} not found", $name);
+                return;
+            }
+        }
+    };
+}
+
 impl Drop for Session {
     fn drop(&mut self) {
         let bin = Self::bin_path();

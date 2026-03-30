@@ -122,8 +122,9 @@ fn test_bash_tab_completion() {
 /// Opens python3, evaluates arithmetic and print, verifies outputs.
 #[test]
 fn test_python3_repl() {
+    let python3 = require_binary!("python3");
     let s = Session::new();
-    s.run_ok(&["open", "/opt/homebrew/bin/python3"]);
+    s.run_ok(&["open", &python3]);
 
     // Wait for the >>> prompt
     s.run_ok(&["wait", "--text", ">>>", "--timeout", "5000"]);
@@ -172,8 +173,9 @@ fn test_python3_repl() {
 /// Opens node, evaluates arithmetic and string method, verifies outputs.
 #[test]
 fn test_nodejs_repl() {
+    let node = require_binary!("node");
     let s = Session::new();
-    s.run_ok(&["open", "/opt/homebrew/bin/node"]);
+    s.run_ok(&["open", &node]);
 
     // Wait for the > prompt. Node shows "Welcome to Node.js" then "> "
     s.run_ok(&["wait", "--text", ">", "--timeout", "5000"]);

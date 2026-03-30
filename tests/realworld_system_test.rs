@@ -17,8 +17,9 @@ fn pause(ms: u64) {
 
 #[test]
 fn test_htop_system_monitor() {
+    let htop = require_binary!("htop");
     let s = Session::new();
-    s.run_ok(&["open", "/opt/homebrew/bin/htop"]);
+    s.run_ok(&["open", &htop]);
 
     // Wait for htop to load — look for common htop UI elements
     s.run_ok(&["wait", "--text", "PID", "--timeout", "8000"]);
