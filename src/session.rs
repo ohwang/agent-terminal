@@ -32,6 +32,16 @@ fn tmux_cmd(args: &[&str]) -> Result<String, String> {
     }
 }
 
+/// Resolve a size preset name to a COLSxROWS string.
+/// Passes through values that are already in COLSxROWS format.
+fn resolve_size_preset(size: &str) -> String {
+    match size {
+        "landscape" => "112x30".to_string(),
+        "vertical" => "80x55".to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Check whether a tmux session exists.
 fn session_exists(session: &str) -> bool {
     tmux_cmd(&["has-session", "-t", session]).is_ok()
@@ -227,13 +237,14 @@ pub fn open(
                 "Session '{session}' already exists. Close it first or use a different name."
             ));
         }
-        // Parse size for new-session -x/-y
+        // Parse size for new-session -x/-y (supports presets or COLSxROWS)
         let mut new_session_args = vec!["new-session", "-d", "-s", session];
         let (cols_str, rows_str) = if let Some(size_str) = size {
-            let parts: Vec<&str> = size_str.split('x').collect();
+            let resolved = resolve_size_preset(size_str);
+            let parts: Vec<&str> = resolved.split('x').collect();
             if parts.len() != 2 {
                 return Err(format!(
-                    "Invalid --size '{size_str}': expected COLSxROWS (e.g., 80x24)"
+                    "Invalid --size '{size_str}': expected COLSxROWS or a preset name (landscape, vertical)"
                 ));
             }
             parts[0]
