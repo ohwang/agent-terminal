@@ -51,8 +51,9 @@ agent-terminal type "hello world" --enter --wait-stable 300 --session s1
 Minimal example testing a TUI app end-to-end:
 
 ```bash
-# 1. Launch the app
+# 1. Launch the app (default size: 112x30)
 agent-terminal open "./my-app" --session test
+# Output: session=test size=112x30 command=./my-app
 
 # 2. Wait for first render to stabilize
 agent-terminal wait --stable 500 --session test
@@ -60,8 +61,8 @@ agent-terminal wait --stable 500 --session test
 # 3. See what's on screen
 agent-terminal snapshot --session test
 # Output:
-# [size: 80x24  cursor: 1,0  session: test]
-# -----------------------------------------
+# [size: 112x30  cursor: 1,0  session: test]
+# ------------------------------------------------
 #   1| Welcome to my-app
 #   2| > Option A
 #   3|   Option B
@@ -71,9 +72,9 @@ agent-terminal snapshot --session test
 
 # 4. Interact and confirm in one step
 agent-terminal send "j" --session test --wait-stable 200
-# Output shows cursor moved to Option B
+# Output: snapshot showing cursor moved to Option B
 
-# 7. Clean up
+# 5. Clean up
 agent-terminal close --session test
 ```
 
@@ -87,7 +88,7 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS] [--shell] [--no-stderr]` | Launch command in a new tmux session |
+| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS\|vertical\|landscape] [--shell] [--no-stderr]` | Launch command in tmux. Default size: 112x30. Presets: `vertical` (80x55), `landscape` (112x30). Prints `session=<s> size=<WxH> command=<cmd>`. |
 | `close [--session s]` | Kill the session and clean up temp files |
 | `list` | List all active tmux sessions |
 
@@ -96,7 +97,7 @@ All commands default to `--session agent-terminal` if not specified.
 | Command | Description |
 |---------|-------------|
 | `snapshot [--session s] [--pane p] [--color] [--raw] [--ansi] [--json] [--diff] [--scrollback N]` | Capture current terminal content |
-| `screenshot [--session s] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render terminal as PNG or HTML image |
+| `screenshot [--session s] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render terminal as PNG or HTML. Default path: `<session>-<YYYYMMDD_HHMMSS>.png` |
 | `scrollback [--session s] [--lines N] [--search "text"]` | Read the tmux scrollback buffer |
 | `find "pattern" [--session s] [--all] [--regex] [--color "style"]` | Search screen for text, return row,col |
 
@@ -188,6 +189,7 @@ Recordings are saved to `~/.agent-terminal/recordings/{group}/` by default. Each
 | `init` | Detect framework and generate starter test |
 | `test-matrix --command "cmd" --test "cmds" [--sizes] [--terms] [--colors]` | Run tests across terminal configurations |
 | `a11y-check "command"` | Accessibility audit (NO_COLOR, TERM=dumb, resize) |
+| `watch [--interval ms] [--filter prefix]` | Live dashboard showing all active sessions (interactive, not for scripts) |
 
 ---
 
@@ -208,7 +210,6 @@ agent-terminal exit-code --session s1
 
 # 2b. If alive=true: the app may be waiting for input or still loading
 agent-terminal wait --stable 1000 --session s1 --timeout 15000
-agent-terminal snapshot --session s1
 ```
 
 ### "wait timed out"
@@ -241,8 +242,8 @@ agent-terminal open "./my-app" --session s1
 agent-terminal snapshot --session s1
 
 # 2. Use 'type' for literal text, 'send' for key names
-agent-terminal type "hello" --session s1    # types h-e-l-l-o literally
-agent-terminal send "Enter" --session s1    # sends the Enter key
+agent-terminal type "hello" --enter --session s1   # types h-e-l-l-o then Enter
+agent-terminal send "Enter" --session s1           # sends the Enter key
 
 # 3. For special characters in text, use paste
 agent-terminal paste "line1\nline2" --session s1
@@ -272,14 +273,12 @@ agent-terminal assert --style "Error" --style-check "fg:red" --session s1
 ### Ratatui (Rust)
 
 ```bash
-# Ratatui apps typically use crossterm and render immediately
 agent-terminal open "cargo run --release" --session rui
 agent-terminal wait --stable 500 --session rui
 
-# Ratatui uses alternate screen -- snapshot captures it correctly
 # Key bindings are usually single characters
-agent-terminal send "q" --session rui     # quit
-agent-terminal send "j" --session rui     # down (vim-style)
+agent-terminal send "j" --session rui --wait-stable 200   # down (vim-style)
+agent-terminal send "q" --session rui                      # quit
 
 # Test resize -- ratatui apps should handle SIGWINCH
 agent-terminal resize 40 10 --session rui
@@ -295,9 +294,7 @@ agent-terminal open "go run ." --session bt
 agent-terminal wait --stable 1000 --session bt   # generous first wait
 
 # Bubbletea uses the Elm architecture -- state updates are async
-# Always wait after sending keys
-agent-terminal send "j" --session bt
-agent-terminal wait --stable 200 --session bt
+agent-terminal send "j" --session bt --wait-stable 200
 
 # Mouse support: most bubbletea apps using lipgloss support mouse
 agent-terminal click 5 10 --session bt
@@ -319,10 +316,8 @@ agent-terminal wait --stable 1500 --session tx   # CSS rendering needs time
 agent-terminal click 3 20 --session tx
 agent-terminal wait --stable 300 --session tx
 
-# Textual supports TEXTUAL_PRESS for testing specific widgets
-# Use type for search/input widgets
-agent-terminal type "search term" --session tx
-agent-terminal send "Enter" --session tx
+# Use type --enter for search/input widgets
+agent-terminal type "search term" --enter --session tx --wait-stable 300
 
 # Test with NO_COLOR (textual should degrade gracefully)
 agent-terminal close --session tx
@@ -338,13 +333,11 @@ agent-terminal snapshot --color --session tx   # verify no color codes
 agent-terminal open "npx tsx src/index.tsx" --session ink
 agent-terminal wait --stable 1000 --session ink
 
-# Ink re-renders on state change -- wait for stability
-agent-terminal send "j" --session ink
-agent-terminal wait --stable 300 --session ink
+# Ink re-renders on state change
+agent-terminal send "j" --session ink --wait-stable 300
 
 # Ink apps often use Tab for navigation
-agent-terminal send "Tab" --session ink
-agent-terminal wait --stable 200 --session ink
+agent-terminal send "Tab" --session ink --wait-stable 200
 
 # Test with CI=true (common env var that affects ink rendering)
 agent-terminal close --session ink
@@ -366,9 +359,7 @@ Full-screen apps use the alternate screen buffer. The visible viewport IS the en
 agent-terminal snapshot --session s1
 
 # Navigation is via app keys (j/k, arrows, PgUp/PgDn)
-agent-terminal send "G" --session s1          # vim-style go to bottom
-agent-terminal wait --stable 200 --session s1
-agent-terminal snapshot --session s1          # now shows bottom of list
+agent-terminal send "G" --session s1 --wait-stable 200   # vim-style go to bottom
 
 # Scrollback buffer is NOT useful for full-screen apps
 # (it contains pre-TUI shell output, not app content)
@@ -483,12 +474,11 @@ agent-terminal wait --stable 500 --session app
 agent-terminal record start --session app --group "fix-42" --label "before"
 
 # 2. Interact to demonstrate the current (buggy) behavior
-agent-terminal send "j" --session app
-agent-terminal wait --stable 200 --session app
-agent-terminal snapshot --session app   # observe the bug
+agent-terminal send "j" --session app --wait-stable 200   # observe the bug
 
-# 3. Stop recording
+# 3. Stop recording and review
 agent-terminal record stop --session app
+# Output: Recording dir: ~/.agent-terminal/recordings/fix-42/...
 agent-terminal close --session app
 
 # ... make code changes ...
@@ -499,12 +489,11 @@ agent-terminal wait --stable 500 --session app
 agent-terminal record start --session app --group "fix-42" --label "after"
 
 # 5. Demonstrate the fix
-agent-terminal send "j" --session app
-agent-terminal wait --stable 200 --session app
-agent-terminal snapshot --session app   # observe the fix
+agent-terminal send "j" --session app --wait-stable 200   # observe the fix
 
-# 6. Stop and clean up
+# 6. Stop, review, and clean up
 agent-terminal record stop --session app
+# Use record view to review: agent-terminal record view --dir <path from above>
 agent-terminal close --session app
 ```
 
