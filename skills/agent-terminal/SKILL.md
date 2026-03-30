@@ -51,14 +51,14 @@ All commands default to `--session agent-terminal` if not specified.
 |---------|-------------|
 | `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS\|vertical\|landscape] [--shell] [--no-stderr]` | Launch command in tmux. Default: 112x30. Presets: `vertical` (80x55), `landscape` (112x30). |
 | `close [--session s]` | Kill the session and clean up temp files |
-| `list` | List all active tmux sessions |
+| `list` | List all active tmux sessions (shows PANES column for multi-pane sessions) |
 
 ### Observation
 
 | Command | Description |
 |---------|-------------|
-| `snapshot [--session s] [--pane p] [--color] [--raw] [--ansi] [--json] [--diff] [--scrollback N]` | Capture current terminal content |
-| `screenshot [--session s] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render as PNG or HTML. Default: `<session>-<timestamp>.png` |
+| `snapshot [--session s] [--pane p] [--window] [--color] [--raw] [--ansi] [--json] [--diff] [--scrollback N]` | Capture current terminal content. `--window` composites all panes in their layout positions. |
+| `screenshot [--session s] [--window] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render as PNG or HTML. `--window` composites all panes. Default: `<session>-<timestamp>.png` |
 | `scrollback [--session s] [--lines N] [--search "text"]` | Read the tmux scrollback buffer |
 | `find "pattern" [--session s] [--all] [--regex] [--color "style"]` | Search screen for text, return row,col |
 
@@ -103,7 +103,7 @@ Default timeout: 10000ms. Default poll interval: 50ms.
 
 | Command | Description |
 |---------|-------------|
-| `status [--session s] [--pane p] [--json]` | Is the process alive, dead, or crashed? |
+| `status [--session s] [--pane p] [--json]` | Process status. Shows pane layout when multiple panes exist (pane IDs, sizes, positions). JSON includes `panes` array. |
 | `exit-code [--session s]` | Get the exit code of the terminated process |
 | `logs [--session s] [--stderr]` | Read captured stderr/stdout |
 | `signal <SIG> [--session s]` | Send a Unix signal (SIGINT, SIGTERM, SIGWINCH, etc.) |
@@ -158,6 +158,40 @@ agent-terminal wait --stable 1000 --session s1 --timeout 15000
 - **`send "C-c"` vs `signal SIGINT`**: `send` goes through the app's input handler. `signal` bypasses it. Usually prefer `send "C-c"`.
 - **Full-screen TUI vs scrolling CLI**: Full-screen apps (ratatui, vim) -- `snapshot` captures everything, scrollback is useless. Scrolling apps (REPL, build output) -- use `scrollback --lines N` or `snapshot --scrollback N` for history.
 - **`paste` vs `type`**: Use `paste` for multi-line text or special characters. Use `type` for simple single-line input.
+
+## Multi-Pane Workflows
+
+Run two programs side by side and observe both at once:
+
+```bash
+# Open first program
+agent-terminal open "./app-v1" --session compare --size 180x40
+
+# Open second program in a split pane
+agent-terminal open "./app-v2" --session compare --pane right
+
+# Check status to discover pane IDs and layout
+agent-terminal status --session compare
+# Output includes: Panes: 2
+#   %0  [90x40 at 0,0]  "left"  (active)
+#   %1  [89x40 at 91,0]  "right"
+#   Hint: use --window to capture all panes, or --pane <id> for a specific one
+
+# Snapshot all panes composited in layout
+agent-terminal snapshot --window --session compare
+
+# JSON snapshot with per-pane layout, cursor, and lines
+agent-terminal snapshot --window --json --session compare
+
+# Screenshot both panes as one image
+agent-terminal screenshot --window --session compare --path compare.png
+
+# Interact with a specific pane using its ID
+agent-terminal send --pane %0 --session compare j
+agent-terminal snapshot --pane %1 --session compare
+```
+
+Pane IDs (`%0`, `%1`, ...) are returned by `status` and work with `--pane` on all commands. Use `--window` on `snapshot`/`screenshot` to capture all panes composited. `--window` conflicts with `--pane`.
 
 ## Reference Docs
 
