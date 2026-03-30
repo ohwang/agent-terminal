@@ -412,11 +412,98 @@ fn dominant_style(segments: &[(String, Style)]) -> Style {
 }
 
 // ---------------------------------------------------------------------------
+// Pane layout types and queries
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize)]
+pub struct PaneLayout {
+    pub pane_id: String,
+    pub left: u16,
+    pub top: u16,
+    pub width: u16,
+    pub height: u16,
+    pub title: String,
+    pub active: bool,
+}
+
+/// Query the layout of all panes in the active window of a session.
+pub fn list_pane_layouts(session: &str) -> Result<Vec<PaneLayout>, String> {
+    let output = Command::new("tmux")
+        .args([
+            "list-panes",
+            "-t",
+            session,
+            "-F",
+            "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}\t#{pane_title}\t#{pane_active}",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run tmux list-panes: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "tmux list-panes failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut panes = Vec::new();
+    for line in stdout.trim().lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 7 {
+            continue;
+        }
+        panes.push(PaneLayout {
+            pane_id: parts[0].to_string(),
+            left: parts[1].parse().unwrap_or(0),
+            top: parts[2].parse().unwrap_or(0),
+            width: parts[3].parse().unwrap_or(0),
+            height: parts[4].parse().unwrap_or(0),
+            title: parts[5].to_string(),
+            active: parts[6] == "1",
+        });
+    }
+    Ok(panes)
+}
+
+/// Get the total window size (cols, rows) for a session.
+pub fn get_window_size(session: &str) -> Result<(u16, u16), String> {
+    let output = Command::new("tmux")
+        .args([
+            "display-message",
+            "-t",
+            session,
+            "-p",
+            "#{window_width} #{window_height}",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run tmux display-message: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "tmux display-message failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = stdout.trim().split_whitespace().collect();
+    if parts.len() < 2 {
+        return Err(format!("Unexpected window size output: {:?}", stdout.trim()));
+    }
+    let cols = parts[0].parse::<u16>().map_err(|e| format!("Bad window_width: {}", e))?;
+    let rows = parts[1].parse::<u16>().map_err(|e| format!("Bad window_height: {}", e))?;
+    Ok((cols, rows))
+}
+
+// ---------------------------------------------------------------------------
 // tmux helpers
 // ---------------------------------------------------------------------------
 
 fn target_str(session: &str, pane: Option<&str>) -> String {
     match pane {
+        // Global pane IDs (%N) are already unique — use directly
+        Some(p) if p.starts_with('%') => p.to_string(),
         Some(p) => format!("{}:{}", session, p),
         None => session.to_string(),
     }
@@ -757,6 +844,7 @@ fn output_diff(
 pub fn snapshot(
     session: &str,
     pane: Option<&str>,
+    window: bool,
     color: bool,
     raw: bool,
     ansi: bool,
@@ -764,6 +852,10 @@ pub fn snapshot(
     diff: bool,
     scrollback: Option<usize>,
 ) -> Result<(), String> {
+    if window {
+        return snapshot_window(session, json, color, ansi, raw);
+    }
+
     // --raw: direct pass-through, no pane info needed
     if raw {
         let content = match scrollback {
@@ -805,6 +897,247 @@ pub fn snapshot(
         }
     }
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Window-level snapshot (all panes composited)
+// ---------------------------------------------------------------------------
+
+fn snapshot_window(
+    session: &str,
+    json: bool,
+    color: bool,
+    ansi: bool,
+    raw: bool,
+) -> Result<(), String> {
+    let panes = list_pane_layouts(session)?;
+    let (win_cols, win_rows) = get_window_size(session)?;
+
+    if panes.len() == 1 {
+        // Single pane — delegate to normal snapshot (active pane)
+        return snapshot(session, None, false, color, raw, ansi, json, false, None);
+    }
+
+    if json {
+        return output_window_json(session, &panes, win_cols, win_rows);
+    }
+
+    let use_ansi = color || ansi;
+
+    // Build a 2D grid of the full window
+    let mut grid: Vec<Vec<char>> = vec![vec![' '; win_cols as usize]; win_rows as usize];
+
+    // Fill separator positions with border characters
+    // First mark all cells, then overlay pane content
+    let pane_mask: Vec<Vec<bool>> = {
+        let mut mask = vec![vec![false; win_cols as usize]; win_rows as usize];
+        for p in &panes {
+            for row in p.top..(p.top + p.height).min(win_rows) {
+                for col in p.left..(p.left + p.width).min(win_cols) {
+                    mask[row as usize][col as usize] = true;
+                }
+            }
+        }
+        mask
+    };
+
+    // Fill non-pane cells with separator chars
+    for row in 0..win_rows as usize {
+        for col in 0..win_cols as usize {
+            if !pane_mask[row][col] {
+                // Determine if this is a vertical or horizontal separator
+                let has_left = col > 0 && pane_mask[row][col - 1];
+                let has_right = col + 1 < win_cols as usize && pane_mask[row][col + 1];
+                if has_left || has_right {
+                    grid[row][col] = '\u{2502}'; // │
+                } else {
+                    grid[row][col] = '\u{2500}'; // ─
+                }
+            }
+        }
+    }
+
+    if use_ansi {
+        // Capture ANSI content per pane and composite with escape sequences
+        let mut ansi_grid: Vec<Vec<String>> = grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.to_string()).collect())
+            .collect();
+
+        for p in &panes {
+            let content = capture_ansi(session, Some(&p.pane_id))?;
+            let lines: Vec<&str> = content.lines().collect();
+            for (line_idx, line) in lines.iter().enumerate() {
+                let row = p.top as usize + line_idx;
+                if row >= win_rows as usize {
+                    break;
+                }
+                // Parse the ANSI line and place each character-cell
+                let mut col_offset = 0usize;
+                let mut current_sgr = String::new();
+                let mut chars = line.chars().peekable();
+                while let Some(ch) = chars.next() {
+                    if ch == '\x1b' {
+                        // Accumulate the escape sequence
+                        let mut seq = String::from('\x1b');
+                        if chars.peek() == Some(&'[') {
+                            seq.push(chars.next().unwrap());
+                            while let Some(&c) = chars.peek() {
+                                seq.push(chars.next().unwrap());
+                                if c.is_ascii_alphabetic() {
+                                    break;
+                                }
+                            }
+                        }
+                        current_sgr.push_str(&seq);
+                    } else {
+                        let col = p.left as usize + col_offset;
+                        if col < win_cols as usize {
+                            let cell = if current_sgr.is_empty() {
+                                ch.to_string()
+                            } else {
+                                let s = format!("{}{}", current_sgr, ch);
+                                current_sgr.clear();
+                                s
+                            };
+                            ansi_grid[row][col] = cell;
+                        }
+                        col_offset += 1;
+                    }
+                }
+            }
+        }
+
+        // Output
+        let header = format!(
+            "[window: {}x{}  panes: {}  session: {}]",
+            win_cols, win_rows, panes.len(), session
+        );
+        println!("{}", header);
+        println!("{}", separator_line(header.len()));
+
+        let width = line_number_width(win_rows as usize);
+        for (i, row) in ansi_grid.iter().enumerate() {
+            let line: String = row.concat();
+            let line = format!("{}\x1b[0m", line); // reset at end of each line
+            println!("{:>width$}\u{2502} {}", i + 1, line, width = width);
+        }
+    } else {
+        // Plain text: capture each pane and place into the grid
+        for p in &panes {
+            let content = capture_plain(session, Some(&p.pane_id))?;
+            let lines: Vec<&str> = content.lines().collect();
+            for (line_idx, line) in lines.iter().enumerate() {
+                let row = p.top as usize + line_idx;
+                if row >= win_rows as usize {
+                    break;
+                }
+                for (col_offset, ch) in line.chars().enumerate() {
+                    let col = p.left as usize + col_offset;
+                    if col < win_cols as usize {
+                        grid[row][col] = ch;
+                    }
+                }
+            }
+        }
+
+        let header = format!(
+            "[window: {}x{}  panes: {}  session: {}]",
+            win_cols, win_rows, panes.len(), session
+        );
+        println!("{}", header);
+        println!("{}", separator_line(header.len()));
+
+        // Trim trailing empty rows
+        let mut last_nonempty = 0;
+        for (i, row) in grid.iter().enumerate() {
+            if row.iter().any(|c| !c.is_whitespace()) {
+                last_nonempty = i;
+            }
+        }
+        let display_rows = &grid[..=last_nonempty];
+        let width = line_number_width(display_rows.len());
+        for (i, row) in display_rows.iter().enumerate() {
+            let line: String = row.iter().collect();
+            println!("{:>width$}\u{2502} {}", i + 1, line, width = width);
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct WindowJsonSnapshot {
+    session: String,
+    window_size: Size,
+    panes: Vec<PaneJsonEntry>,
+}
+
+#[derive(Serialize)]
+struct PaneJsonEntry {
+    pane_id: String,
+    left: u16,
+    top: u16,
+    width: u16,
+    height: u16,
+    title: String,
+    active: bool,
+    size: Size,
+    cursor: Cursor,
+    lines: Vec<Line>,
+}
+
+fn output_window_json(
+    session: &str,
+    panes: &[PaneLayout],
+    win_cols: u16,
+    win_rows: u16,
+) -> Result<(), String> {
+    let mut entries = Vec::new();
+    for p in panes {
+        let ansi_content = capture_ansi(session, Some(&p.pane_id))?;
+        let (cols, rows, cx, cy) = get_pane_info(session, Some(&p.pane_id))?;
+
+        let all_lines: Vec<&str> = ansi_content.lines().collect();
+        let lines = trim_trailing_empty(&all_lines);
+
+        let json_lines: Vec<Line> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, raw_line)| {
+                let (text, spans) = parse_ansi_line(raw_line);
+                Line {
+                    row: i + 1,
+                    text,
+                    spans,
+                }
+            })
+            .collect();
+
+        entries.push(PaneJsonEntry {
+            pane_id: p.pane_id.clone(),
+            left: p.left,
+            top: p.top,
+            width: p.width,
+            height: p.height,
+            title: p.title.clone(),
+            active: p.active,
+            size: Size { cols, rows },
+            cursor: Cursor { row: cy, col: cx },
+            lines: json_lines,
+        });
+    }
+
+    let snapshot = WindowJsonSnapshot {
+        session: session.to_string(),
+        window_size: Size { cols: win_cols, rows: win_rows },
+        panes: entries,
+    };
+
+    let json = serde_json::to_string_pretty(&snapshot)
+        .map_err(|e| format!("JSON serialization failed: {}", e))?;
+    println!("{}", json);
     Ok(())
 }
 

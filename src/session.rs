@@ -50,6 +50,7 @@ fn session_exists(session: &str) -> bool {
 /// Build a tmux target string, e.g. `"mysess"` or `"mysess:mypane"`.
 fn target_pane(session: &str, pane: Option<&str>) -> String {
     match pane {
+        Some(p) if p.starts_with('%') => p.to_string(),
         Some(p) => format!("{session}:{p}"),
         None => session.to_string(),
     }
@@ -321,7 +322,7 @@ pub fn list() -> Result<(), String> {
                 println!("No active tmux sessions.");
                 return Ok(());
             }
-            println!("{:<30} {:<24} {}", "SESSION", "CREATED", "WINDOWS");
+            println!("{:<30} {:<24} {:<10} {}", "SESSION", "CREATED", "WINDOWS", "PANES");
             for line in text.trim().lines() {
                 let parts: Vec<&str> = line.splitn(3, ' ').collect();
                 if parts.len() < 3 {
@@ -336,15 +337,19 @@ pub fn list() -> Result<(), String> {
                     ""
                 };
 
+                // Count panes for this session
+                let pane_count = crate::snapshot::list_pane_layouts(name)
+                    .map(|p| p.len())
+                    .unwrap_or(0);
+
                 // Convert unix timestamp to a readable string.
                 let created_str = if created_ts > 0 {
-                    // Use chrono-free approach: shell out to date or just show ts.
                     format!("{created_ts}")
                 } else {
                     "unknown".to_string()
                 };
 
-                println!("{:<30} {:<24} {}{}", name, created_str, windows, tag);
+                println!("{:<30} {:<24} {:<10} {}{}", name, created_str, windows, pane_count, tag);
             }
             Ok(())
         }
@@ -392,13 +397,30 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
         })
         .unwrap_or(0);
 
+    // Query pane layout info
+    let pane_layouts = crate::snapshot::list_pane_layouts(session).unwrap_or_default();
+
     if json {
         let ec_json = match exit_code {
             Some(c) => c.to_string(),
             None => "null".to_string(),
         };
+        let panes_json = if pane_layouts.len() > 1 {
+            let entries: Vec<String> = pane_layouts
+                .iter()
+                .map(|p| {
+                    format!(
+                        "{{\"id\":\"{}\",\"left\":{},\"top\":{},\"width\":{},\"height\":{},\"title\":\"{}\",\"active\":{}}}",
+                        p.pane_id, p.left, p.top, p.width, p.height, p.title, p.active
+                    )
+                })
+                .collect();
+            format!(",\"panes\":[{}]", entries.join(","))
+        } else {
+            String::new()
+        };
         println!(
-            "{{\"alive\":{alive},\"pid\":{pid},\"exit_code\":{ec_json},\"signal\":null,\"runtime_ms\":{runtime_ms}}}"
+            "{{\"alive\":{alive},\"pid\":{pid},\"exit_code\":{ec_json},\"signal\":null,\"runtime_ms\":{runtime_ms}{panes_json}}}"
         );
     } else {
         let status_word = if alive { "alive" } else { "dead" };
@@ -411,6 +433,17 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
         let secs = runtime_ms / 1000;
         let ms = runtime_ms % 1000;
         println!("Runtime:  {secs}.{ms:03}s");
+        if pane_layouts.len() > 1 {
+            println!("Panes:    {}", pane_layouts.len());
+            for p in &pane_layouts {
+                let active_marker = if p.active { "  (active)" } else { "" };
+                println!(
+                    "  {}  [{}x{} at {},{}]  \"{}\"{active_marker}",
+                    p.pane_id, p.width, p.height, p.left, p.top, p.title
+                );
+            }
+            println!("Hint:     use --window to capture all panes, or --pane <id> for a specific one");
+        }
     }
 
     Ok(())

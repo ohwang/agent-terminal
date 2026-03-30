@@ -29,6 +29,7 @@ fn tmux_cmd(args: &[&str]) -> Result<String, String> {
 
 fn target_str(session: &str, pane: Option<&str>) -> String {
     match pane {
+        Some(p) if p.starts_with('%') => p.to_string(),
         Some(p) => format!("{}:{}", session, p),
         None => session.to_string(),
     }

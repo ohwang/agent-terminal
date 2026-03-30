@@ -257,6 +257,152 @@ fn test_panes_are_independent() {
 }
 
 #[test]
+fn test_snapshot_window_captures_all_panes() {
+    let s = Session::new();
+
+    // Open counter in the first pane
+    let counter_path = Session::fixture_path("counter");
+    s.run_ok(&["open", &counter_path]);
+    s.run_ok(&["wait", "--text", "Count:", "--timeout", "5000"]);
+
+    // Split to create second pane with echo
+    let echo_path = Session::fixture_path("echo");
+    s.run_ok(&["open", &echo_path, "--pane", "second"]);
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    // Snapshot with --window should contain content from both panes
+    let snap = s.run_ok(&["snapshot", "--window"]);
+    assert!(
+        snap.contains("Count:"),
+        "Window snapshot should include counter pane content: {}",
+        snap
+    );
+    assert!(
+        snap.contains("READY"),
+        "Window snapshot should include echo pane content: {}",
+        snap
+    );
+    assert!(
+        snap.contains("panes: 2"),
+        "Window snapshot header should show pane count: {}",
+        snap
+    );
+}
+
+#[test]
+fn test_snapshot_window_json() {
+    let s = Session::new();
+
+    let counter_path = Session::fixture_path("counter");
+    s.run_ok(&["open", &counter_path]);
+    s.run_ok(&["wait", "--text", "Count:", "--timeout", "5000"]);
+
+    let echo_path = Session::fixture_path("echo");
+    s.run_ok(&["open", &echo_path, "--pane", "second"]);
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    let snap = s.run_ok(&["snapshot", "--window", "--json"]);
+    let json: serde_json::Value = serde_json::from_str(&snap).expect("invalid JSON");
+
+    // Should have window_size and panes array
+    assert!(json["window_size"].is_object(), "Should have window_size: {}", snap);
+    assert!(json["panes"].is_array(), "Should have panes array: {}", snap);
+    assert_eq!(
+        json["panes"].as_array().unwrap().len(),
+        2,
+        "Should have 2 panes: {}",
+        snap
+    );
+
+    // Each pane should have layout info
+    let pane0 = &json["panes"][0];
+    assert!(pane0["pane_id"].is_string(), "Pane should have pane_id");
+    assert!(pane0["left"].is_number(), "Pane should have left");
+    assert!(pane0["width"].is_number(), "Pane should have width");
+    assert!(pane0["lines"].is_array(), "Pane should have lines");
+}
+
+#[test]
+fn test_snapshot_window_single_pane_fallback() {
+    let s = Session::new();
+
+    let counter_path = Session::fixture_path("counter");
+    s.run_ok(&["open", &counter_path]);
+    s.run_ok(&["wait", "--text", "Count:", "--timeout", "5000"]);
+
+    // --window with a single pane should still work (falls back to normal snapshot)
+    let snap = s.run_ok(&["snapshot", "--window"]);
+    assert!(
+        snap.contains("Count:"),
+        "Single-pane window snapshot should show content: {}",
+        snap
+    );
+}
+
+#[test]
+fn test_screenshot_window_html() {
+    let s = Session::new();
+
+    let counter_path = Session::fixture_path("counter");
+    s.run_ok(&["open", &counter_path]);
+    s.run_ok(&["wait", "--text", "Count:", "--timeout", "5000"]);
+
+    let echo_path = Session::fixture_path("echo");
+    s.run_ok(&["open", &echo_path, "--pane", "second"]);
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    let tmp = format!("/tmp/agent-terminal-test-window-{}.html", std::process::id());
+    let out = s.run_ok(&["screenshot", "--window", "--html", "--path", &tmp]);
+    assert!(out.contains("Screenshot saved to"), "Should save: {}", out);
+
+    let html = std::fs::read_to_string(&tmp).expect("should read HTML file");
+    assert!(html.contains("pane"), "HTML should contain pane elements");
+    assert!(html.contains("window"), "HTML should reference window");
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn test_status_shows_pane_info() {
+    let s = Session::new();
+
+    let counter_path = Session::fixture_path("counter");
+    s.run_ok(&["open", &counter_path]);
+    s.run_ok(&["wait", "--text", "Count:", "--timeout", "5000"]);
+
+    let echo_path = Session::fixture_path("echo");
+    s.run_ok(&["open", &echo_path, "--pane", "second"]);
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    // Plain text status should show pane info
+    let status = s.run_ok(&["status"]);
+    assert!(
+        status.contains("Panes:"),
+        "Status should show pane count: {}",
+        status
+    );
+    assert!(
+        status.contains("--window"),
+        "Status should include hint about --window: {}",
+        status
+    );
+
+    // JSON status should include panes array
+    let json_status = s.run_ok(&["status", "--json"]);
+    let json: serde_json::Value = serde_json::from_str(&json_status).expect("invalid JSON");
+    assert!(
+        json["panes"].is_array(),
+        "JSON status should have panes array: {}",
+        json_status
+    );
+    assert_eq!(
+        json["panes"].as_array().unwrap().len(),
+        2,
+        "Should have 2 panes in JSON: {}",
+        json_status
+    );
+}
+
+#[test]
 fn test_quit_one_pane_other_survives() {
     let s = Session::new();
 

@@ -83,8 +83,11 @@ enum Commands {
         #[arg(long, default_value = "agent-terminal")]
         session: String,
         /// Pane name
-        #[arg(long)]
+        #[arg(long, conflicts_with = "window")]
         pane: Option<String>,
+        /// Capture all panes in the window (composited in layout positions)
+        #[arg(long)]
+        window: bool,
         /// Show color/style annotations
         #[arg(long)]
         color: bool,
@@ -301,6 +304,9 @@ enum Commands {
         /// Session name
         #[arg(long, default_value = "agent-terminal")]
         session: String,
+        /// Capture all panes in the window (composited in layout positions)
+        #[arg(long)]
+        window: bool,
     },
     /// Send a signal to the process
     Signal {
@@ -592,8 +598,8 @@ fn main() {
         Commands::Logs { session, stderr } => {
             session::logs(&session, stderr)
         }
-        Commands::Snapshot { session, pane, color, raw, ansi, json, diff, scrollback } => {
-            snapshot::snapshot(&session, pane.as_deref(), color, raw, ansi, json, diff, scrollback)
+        Commands::Snapshot { session, pane, window, color, raw, ansi, json, diff, scrollback } => {
+            snapshot::snapshot(&session, pane.as_deref(), window, color, raw, ansi, json, diff, scrollback)
         }
         Commands::Send { keys, session, pane, wait_stable } => {
             (|| {
@@ -642,8 +648,8 @@ fn main() {
         Commands::Find { pattern, all, regex, color, session } => {
             wait::find(&pattern, all, regex, color.as_deref(), &session)
         }
-        Commands::Screenshot { path, annotate, html, theme, session } => {
-            annotate::screenshot(path.as_deref(), annotate, html, &theme, &session)
+        Commands::Screenshot { path, annotate, html, theme, session, window } => {
+            annotate::screenshot(path.as_deref(), annotate, html, &theme, &session, window)
         }
         Commands::Signal { signal, session } => {
             interact::signal(&signal, &session)
