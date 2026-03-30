@@ -25,7 +25,10 @@ snapshot -> reason -> act -> wait -> snapshot
 **Never fire-and-forget.** Every action (send, type, click, resize) must be followed by a wait and then a snapshot to confirm the result. If you skip the confirmation snapshot, you will drift out of sync with reality.
 
 ```bash
-# CORRECT
+# BEST -- single command: act + wait + snapshot in one turn
+agent-terminal send Enter --session s1 --wait-stable 300
+
+# ALSO CORRECT -- separate commands
 agent-terminal send Enter --session s1
 agent-terminal wait --stable 300 --session s1
 agent-terminal snapshot --session s1
@@ -33,6 +36,12 @@ agent-terminal snapshot --session s1
 # WRONG -- no confirmation
 agent-terminal send Enter --session s1
 agent-terminal send "j" --session s1       # you don't know if Enter worked
+```
+
+Use `--wait-stable` on `send` and `type` to combine the action, wait, and snapshot into a single command. This saves turns and keeps you in sync. For typing text and submitting, use `type --enter --wait-stable`:
+
+```bash
+agent-terminal type "hello world" --enter --wait-stable 300 --session s1
 ```
 
 ---
@@ -60,14 +69,8 @@ agent-terminal snapshot --session test
 #   5|
 #   6| [q]uit  [Enter] select
 
-# 4. Interact
-agent-terminal send "j" --session test
-
-# 5. Wait for the app to respond
-agent-terminal wait --stable 200 --session test
-
-# 6. Confirm the result
-agent-terminal snapshot --session test
+# 4. Interact and confirm in one step
+agent-terminal send "j" --session test --wait-stable 200
 # Output shows cursor moved to Option B
 
 # 7. Clean up
@@ -101,8 +104,8 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `send <keys>... [--session s] [--pane p]` | Send named key sequences (e.g., `Enter`, `C-c`, `j`) |
-| `type "text" [--session s] [--pane p]` | Type literal text (no key-name interpretation) |
+| `send <keys>... [--session s] [--pane p] [--wait-stable ms]` | Send named key sequences (e.g., `Enter`, `C-c`, `j`). `--wait-stable` waits then prints snapshot. |
+| `type "text" [--session s] [--pane p] [--enter] [--wait-stable ms]` | Type literal text. `--enter` sends Enter after typing. `--wait-stable` waits then prints snapshot. |
 | `paste "text" [--session s] [--pane p]` | Paste via tmux buffer (safe for special chars) |
 | `resize <cols> <rows> [--session s] [--pane p]` | Resize the terminal |
 | `click <row> <col> [--session s] [--right] [--double]` | Mouse click at position (1-indexed) |
@@ -568,7 +571,10 @@ agent-terminal web --dir ./recordings
 agent-terminal send "j" --session s1
 agent-terminal snapshot --session s1    # may capture pre-action state
 
-# RIGHT
+# BEST -- single command with built-in wait
+agent-terminal send "j" --session s1 --wait-stable 200
+
+# ALSO RIGHT -- separate commands
 agent-terminal send "j" --session s1
 agent-terminal wait --stable 200 --session s1
 agent-terminal snapshot --session s1
@@ -582,9 +588,11 @@ agent-terminal send "Enter" --session s1
 # type sends literal characters: types E-n-t-e-r
 agent-terminal type "Enter" --session s1
 
-# For typing text into input fields, use type
-agent-terminal type "hello world" --session s1
-agent-terminal send "Enter" --session s1
+# For typing text and submitting, use type --enter
+agent-terminal type "hello world" --enter --session s1
+
+# Or combine everything: type, enter, and wait for result
+agent-terminal type "hello world" --enter --wait-stable 300 --session s1
 ```
 
 **3. Not checking process health when things seem stuck**

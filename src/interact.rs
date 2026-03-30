@@ -34,6 +34,11 @@ fn target_str(session: &str, pane: Option<&str>) -> String {
     }
 }
 
+/// Build the tmux target string for passing to wait functions.
+pub fn target_for_wait(session: &str, pane: Option<&str>) -> String {
+    target_str(session, pane)
+}
+
 /// Map user-facing key names to their tmux equivalents.
 fn map_key(key: &str) -> &str {
     match key {

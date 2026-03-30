@@ -115,6 +115,9 @@ enum Commands {
         /// Pane name
         #[arg(long)]
         pane: Option<String>,
+        /// Wait for screen to stabilize for N ms after sending, then print snapshot
+        #[arg(long = "wait-stable")]
+        wait_stable: Option<u64>,
     },
     /// Type literal text
     Type {
@@ -126,6 +129,12 @@ enum Commands {
         /// Pane name
         #[arg(long)]
         pane: Option<String>,
+        /// Send Enter after typing
+        #[arg(long)]
+        enter: bool,
+        /// Wait for screen to stabilize for N ms after typing, then print snapshot
+        #[arg(long = "wait-stable")]
+        wait_stable: Option<u64>,
     },
     /// Paste text via tmux paste buffer
     Paste {
@@ -586,11 +595,28 @@ fn main() {
         Commands::Snapshot { session, pane, color, raw, ansi, json, diff, scrollback } => {
             snapshot::snapshot(&session, pane.as_deref(), color, raw, ansi, json, diff, scrollback)
         }
-        Commands::Send { keys, session, pane } => {
-            interact::send_keys(&keys, &session, pane.as_deref())
+        Commands::Send { keys, session, pane, wait_stable } => {
+            (|| {
+                interact::send_keys(&keys, &session, pane.as_deref())?;
+                if let Some(stable_ms) = wait_stable {
+                    let target = interact::target_for_wait(&session, pane.as_deref());
+                    wait::wait_stable_only(stable_ms, &target)?;
+                }
+                Ok(())
+            })()
         }
-        Commands::Type { text, session, pane } => {
-            interact::type_text(&text, &session, pane.as_deref())
+        Commands::Type { text, session, pane, enter, wait_stable } => {
+            (|| {
+                interact::type_text(&text, &session, pane.as_deref())?;
+                if enter {
+                    interact::send_keys(&["Enter".to_string()], &session, pane.as_deref())?;
+                }
+                if let Some(stable_ms) = wait_stable {
+                    let target = interact::target_for_wait(&session, pane.as_deref());
+                    wait::wait_stable_only(stable_ms, &target)?;
+                }
+                Ok(())
+            })()
         }
         Commands::Paste { text, session, pane } => {
             interact::paste(&text, &session, pane.as_deref())

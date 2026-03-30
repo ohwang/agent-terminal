@@ -339,6 +339,12 @@ fn style_matches(actual: &AnsiStyle, required: &AnsiStyle) -> bool {
 // Wait
 // ---------------------------------------------------------------------------
 
+/// Wait for screen stability and print the snapshot.
+/// Used by `type --wait-stable` and `send --wait-stable`.
+pub fn wait_stable_only(stable_ms: u64, session: &str) -> Result<(), String> {
+    wait(None, None, None, Some(stable_ms), None, None, false, session, 10_000, 50)
+}
+
 /// Poll-based wait system. Exactly one condition should be active.
 ///
 /// Returns Ok(()) on success, Err with diagnostic message on timeout or error.
