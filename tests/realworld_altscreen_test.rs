@@ -29,16 +29,50 @@ fn open_bash_with_prompt(s: &Session) {
 /// nvim runs on an alternate screen. Opening :help creates a split within
 /// that alternate screen. This tests that agent-terminal can snapshot and
 /// interact through nested alternate-screen layers.
+///
+/// Requires nvim to be installed — skipped if not found.
 #[test]
 fn test_nested_altscreen_nvim_help() {
+    // Find nvim: check common paths, then fall back to PATH lookup
+    let nvim_path = [
+        "/opt/homebrew/bin/nvim",
+        "/usr/local/bin/nvim",
+        "/usr/bin/nvim",
+    ]
+    .iter()
+    .find(|p| std::path::Path::new(p).exists())
+    .map(|p| p.to_string())
+    .or_else(|| {
+        std::process::Command::new("which")
+            .arg("nvim")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    });
+
+    let nvim_path = match nvim_path {
+        Some(p) => p,
+        None => {
+            eprintln!("nvim not found, skipping test_nested_altscreen_nvim_help");
+            return;
+        }
+    };
+
     let s = Session::new();
-    s.run_ok(&["open", "/opt/homebrew/bin/nvim"]);
+    s.run_ok(&["open", &nvim_path]);
 
     // Wait for nvim to load. This system may have LazyVim configured, which
     // shows a splash screen instead of bare ~ lines. We wait for either.
     // LazyVim splash shows "Find File", plain nvim shows "~".
     pause(2000);
-    s.run_ok(&["wait", "--regex", r"~|NVIM|Find File|LazyVim", "--timeout", "8000"]);
+    s.run_ok(&[
+        "wait",
+        "--regex",
+        r"~|NVIM|Find File|LazyVim",
+        "--timeout",
+        "8000",
+    ]);
     pause(500);
 
     // Snapshot and verify we are in nvim
@@ -60,7 +94,13 @@ fn test_nested_altscreen_nvim_help() {
     pause(1000);
 
     // Wait for help content to appear
-    s.run_ok(&["wait", "--regex", r"help\.txt|VIM -|NVIM|quickref", "--timeout", "8000"]);
+    s.run_ok(&[
+        "wait",
+        "--regex",
+        r"help\.txt|VIM -|NVIM|quickref",
+        "--timeout",
+        "8000",
+    ]);
 
     // Snapshot — should show help in a split
     let snap_help = s.run_ok(&["snapshot"]);
@@ -184,7 +224,10 @@ fn test_wait_stable_and_regex() {
     );
 
     // Now generate output that takes time (items with delays)
-    s.run_ok(&["type", "for i in 1 2 3; do echo \"item$i\"; sleep 0.3; done"]);
+    s.run_ok(&[
+        "type",
+        "for i in 1 2 3; do echo \"item$i\"; sleep 0.3; done",
+    ]);
     pause(100);
     s.run_ok(&["send", "Enter"]);
 
