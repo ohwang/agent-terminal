@@ -1,4 +1,5 @@
 mod annotate;
+mod ansi;
 mod interact;
 mod perf;
 mod record;

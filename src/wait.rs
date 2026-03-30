@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 
 use regex::Regex;
 
+use crate::ansi;
+
 // ---------------------------------------------------------------------------
 // Tmux helpers (inline until snapshot module is available)
 // ---------------------------------------------------------------------------
@@ -109,256 +111,6 @@ fn format_snapshot(content: &str) -> String {
         out.push_str(&format!("  {}| {}\n", i + 1, line));
     }
     out
-}
-
-// ---------------------------------------------------------------------------
-// ANSI style parsing
-// ---------------------------------------------------------------------------
-
-/// A style descriptor parsed from ANSI SGR sequences.
-#[derive(Debug, Clone, Default, PartialEq)]
-struct AnsiStyle {
-    fg: Option<String>,
-    bg: Option<String>,
-    bold: bool,
-    dim: bool,
-    italic: bool,
-    underline: bool,
-    reverse: bool,
-    strikethrough: bool,
-}
-
-/// A span of text with its associated style.
-#[derive(Debug, Clone)]
-struct StyledSpan {
-    text: String,
-    style: AnsiStyle,
-    col: usize, // 0-indexed column where this span starts
-}
-
-/// Map a basic ANSI color code to a name.
-fn color_name(code: u64) -> Option<String> {
-    match code {
-        0 => Some("black".to_string()),
-        1 => Some("red".to_string()),
-        2 => Some("green".to_string()),
-        3 => Some("yellow".to_string()),
-        4 => Some("blue".to_string()),
-        5 => Some("magenta".to_string()),
-        6 => Some("cyan".to_string()),
-        7 => Some("white".to_string()),
-        // Bright colors
-        8 => Some("bright-black".to_string()),
-        9 => Some("bright-red".to_string()),
-        10 => Some("bright-green".to_string()),
-        11 => Some("bright-yellow".to_string()),
-        12 => Some("bright-blue".to_string()),
-        13 => Some("bright-magenta".to_string()),
-        14 => Some("bright-cyan".to_string()),
-        15 => Some("bright-white".to_string()),
-        _ => None,
-    }
-}
-
-/// Apply SGR parameters to the current style.
-fn apply_sgr(style: &mut AnsiStyle, params: &[u64]) {
-    let mut i = 0;
-    while i < params.len() {
-        match params[i] {
-            0 => *style = AnsiStyle::default(),
-            1 => style.bold = true,
-            2 => style.dim = true,
-            3 => style.italic = true,
-            4 => style.underline = true,
-            7 => style.reverse = true,
-            9 => style.strikethrough = true,
-            21 => style.underline = true, // double underline, treat as underline
-            22 => {
-                style.bold = false;
-                style.dim = false;
-            }
-            23 => style.italic = false,
-            24 => style.underline = false,
-            27 => style.reverse = false,
-            29 => style.strikethrough = false,
-            // Foreground colors 30-37
-            c @ 30..=37 => style.fg = color_name(c - 30),
-            // Extended foreground: 38;5;N or 38;2;R;G;B
-            38 => {
-                if i + 1 < params.len() {
-                    if params[i + 1] == 5 && i + 2 < params.len() {
-                        // 256-color mode
-                        let c = params[i + 2];
-                        style.fg = color_name(c).or_else(|| Some(format!("{}", c)));
-                        i += 2;
-                    } else if params[i + 1] == 2 && i + 4 < params.len() {
-                        // True color
-                        style.fg = Some(format!(
-                            "#{:02x}{:02x}{:02x}",
-                            params[i + 2],
-                            params[i + 3],
-                            params[i + 4]
-                        ));
-                        i += 4;
-                    }
-                }
-            }
-            39 => style.fg = None,
-            // Background colors 40-47
-            c @ 40..=47 => style.bg = color_name(c - 40),
-            // Extended background: 48;5;N or 48;2;R;G;B
-            48 => {
-                if i + 1 < params.len() {
-                    if params[i + 1] == 5 && i + 2 < params.len() {
-                        let c = params[i + 2];
-                        style.bg = color_name(c).or_else(|| Some(format!("{}", c)));
-                        i += 2;
-                    } else if params[i + 1] == 2 && i + 4 < params.len() {
-                        style.bg = Some(format!(
-                            "#{:02x}{:02x}{:02x}",
-                            params[i + 2],
-                            params[i + 3],
-                            params[i + 4]
-                        ));
-                        i += 4;
-                    }
-                }
-            }
-            49 => style.bg = None,
-            // Bright foreground colors 90-97
-            c @ 90..=97 => style.fg = color_name(c - 90 + 8),
-            // Bright background colors 100-107
-            c @ 100..=107 => style.bg = color_name(c - 100 + 8),
-            _ => {} // Ignore unknown codes
-        }
-        i += 1;
-    }
-}
-
-/// Parse a single line of ANSI-escaped text into styled spans.
-fn parse_ansi_line(line: &str) -> Vec<StyledSpan> {
-    let mut spans = Vec::new();
-    let mut style = AnsiStyle::default();
-    let mut current_text = String::new();
-    let mut col: usize = 0;
-    let mut span_start_col: usize = 0;
-
-    let bytes = line.as_bytes();
-    let mut i = 0;
-
-    while i < bytes.len() {
-        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
-            // Save any accumulated text as a span.
-            if !current_text.is_empty() {
-                spans.push(StyledSpan {
-                    text: current_text.clone(),
-                    style: style.clone(),
-                    col: span_start_col,
-                });
-                current_text.clear();
-            }
-
-            // Parse the CSI sequence: ESC [ params final_byte
-            i += 2; // skip ESC [
-            let mut param_str = String::new();
-            while i < bytes.len() && bytes[i] != b'm' && !(bytes[i] >= 0x40 && bytes[i] <= 0x7e) {
-                param_str.push(bytes[i] as char);
-                i += 1;
-            }
-
-            if i < bytes.len() {
-                let final_byte = bytes[i] as char;
-                i += 1; // skip the final byte
-
-                if final_byte == 'm' {
-                    // SGR sequence
-                    let params: Vec<u64> = if param_str.is_empty() {
-                        vec![0] // ESC[m is the same as ESC[0m (reset)
-                    } else {
-                        param_str
-                            .split(';')
-                            .map(|s| s.parse::<u64>().unwrap_or(0))
-                            .collect()
-                    };
-                    apply_sgr(&mut style, &params);
-                    span_start_col = col;
-                }
-                // Ignore other CSI sequences (cursor movement, etc.)
-            }
-        } else {
-            if current_text.is_empty() {
-                span_start_col = col;
-            }
-            current_text.push(bytes[i] as char);
-            col += 1;
-            i += 1;
-        }
-    }
-
-    // Push any remaining text.
-    if !current_text.is_empty() {
-        spans.push(StyledSpan {
-            text: current_text,
-            style: style.clone(),
-            col: span_start_col,
-        });
-    }
-
-    spans
-}
-
-/// Parse a style specification string like "fg:red,bold,underline" into an AnsiStyle.
-fn parse_style_spec(spec: &str) -> AnsiStyle {
-    let mut style = AnsiStyle::default();
-    for part in spec.split(',') {
-        let part = part.trim();
-        if let Some(color) = part.strip_prefix("fg:") {
-            style.fg = Some(color.to_lowercase());
-        } else if let Some(color) = part.strip_prefix("bg:") {
-            style.bg = Some(color.to_lowercase());
-        } else {
-            match part.to_lowercase().as_str() {
-                "bold" => style.bold = true,
-                "dim" => style.dim = true,
-                "italic" => style.italic = true,
-                "underline" => style.underline = true,
-                "reverse" => style.reverse = true,
-                "strikethrough" => style.strikethrough = true,
-                _ => {} // Ignore unknown style parts
-            }
-        }
-    }
-    style
-}
-
-/// Check if an actual style matches the required style spec.
-/// Only checks the attributes that are set in the spec (non-default).
-fn style_matches(actual: &AnsiStyle, required: &AnsiStyle) -> bool {
-    if required.fg.is_some() && actual.fg != required.fg {
-        return false;
-    }
-    if required.bg.is_some() && actual.bg != required.bg {
-        return false;
-    }
-    if required.bold && !actual.bold {
-        return false;
-    }
-    if required.dim && !actual.dim {
-        return false;
-    }
-    if required.italic && !actual.italic {
-        return false;
-    }
-    if required.underline && !actual.underline {
-        return false;
-    }
-    if required.reverse && !actual.reverse {
-        return false;
-    }
-    if required.strikethrough && !actual.strikethrough {
-        return false;
-    }
-    true
 }
 
 // ---------------------------------------------------------------------------
@@ -754,13 +506,13 @@ pub fn assert_cmd(
             ));
         }
 
-        let spans = parse_ansi_line(lines[idx]);
-        let required = parse_style_spec(expected_style_str);
+        let (plain, spans) = ansi::parse_ansi_line(lines[idx]);
+        let required = ansi::parse_style_spec(expected_style_str);
 
         // Check if any span on this row matches the required style.
-        let has_match = spans
-            .iter()
-            .any(|s| !s.text.trim().is_empty() && style_matches(&s.style, &required));
+        let has_match = spans.iter().any(|s| {
+            !plain[s.start..s.end].trim().is_empty() && ansi::style_matches(&s.style, &required)
+        });
 
         if has_match {
             println!("PASS: row {} has style \"{}\"", row_num, expected_style_str);
@@ -768,8 +520,15 @@ pub fn assert_cmd(
         } else {
             let actual_styles: Vec<String> = spans
                 .iter()
-                .filter(|s| !s.text.trim().is_empty())
-                .map(|s| format!("  col {}: \"{}\" → {:?}", s.col + 1, s.text, s.style))
+                .filter(|s| !plain[s.start..s.end].trim().is_empty())
+                .map(|s| {
+                    format!(
+                        "  col {}: \"{}\" → {:?}",
+                        s.start + 1,
+                        &plain[s.start..s.end],
+                        s.style
+                    )
+                })
                 .collect();
             return Err(format!(
                 "FAIL: row {} does not have style \"{}\"\n\nActual styles on row {}:\n{}",
@@ -787,15 +546,11 @@ pub fn assert_cmd(
             "--style requires --style-check to specify the expected style".to_string()
         })?;
         let ansi_content = capture_ansi(session)?;
-        let required = parse_style_spec(expected_style_str);
+        let required = ansi::parse_style_spec(expected_style_str);
 
         // Search through all lines for the target text and check its style.
         for (line_idx, line) in ansi_content.lines().enumerate() {
-            let spans = parse_ansi_line(line);
-
-            // Reconstruct the plain text from spans to find the target text,
-            // then determine which spans cover it and check their styles.
-            let plain: String = spans.iter().map(|s| s.text.as_str()).collect();
+            let (plain, spans) = ansi::parse_ansi_line(line);
 
             let mut search_start = 0;
             while let Some(pos) = plain[search_start..].find(target_text) {
@@ -804,20 +559,15 @@ pub fn assert_cmd(
 
                 // Find which spans cover this text range.
                 let mut all_match = true;
-                let mut char_pos = 0;
                 for span in &spans {
-                    let span_start = char_pos;
-                    let span_end = char_pos + span.text.len();
-
                     // Check if this span overlaps with our target text range.
-                    if span_start < text_end
-                        && span_end > abs_pos
-                        && !style_matches(&span.style, &required)
+                    if span.start < text_end
+                        && span.end > abs_pos
+                        && !ansi::style_matches(&span.style, &required)
                     {
                         all_match = false;
                         break;
                     }
-                    char_pos = span_end;
                 }
 
                 if all_match {
@@ -942,7 +692,7 @@ fn find_by_color(
     session: &str,
 ) -> Result<(), String> {
     let ansi_content = capture_ansi(session)?;
-    let required = parse_style_spec(color_spec);
+    let required = ansi::parse_style_spec(color_spec);
     let re = if regex {
         Some(Regex::new(pattern).map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?)
     } else {
@@ -952,29 +702,30 @@ fn find_by_color(
     let mut matches = Vec::new();
 
     for (line_idx, line) in ansi_content.lines().enumerate() {
-        let spans = parse_ansi_line(line);
+        let (plain, spans) = ansi::parse_ansi_line(line);
 
         for span in &spans {
-            if span.text.trim().is_empty() {
+            let text = &plain[span.start..span.end];
+            if text.trim().is_empty() {
                 continue;
             }
-            if !style_matches(&span.style, &required) {
+            if !ansi::style_matches(&span.style, &required) {
                 continue;
             }
 
             // Check if the span text matches the pattern.
             let text_matches = if let Some(ref re) = re {
-                re.is_match(&span.text)
+                re.is_match(text)
             } else {
-                span.text.contains(pattern) || pattern.is_empty()
+                text.contains(pattern) || pattern.is_empty()
             };
 
             if text_matches {
                 matches.push(format!(
                     "row {}, col {}: \"{}\"",
                     line_idx + 1,
-                    span.col + 1,
-                    span.text.trim(),
+                    span.start + 1,
+                    text.trim(),
                 ));
                 if !all {
                     println!("Found at {}", matches[0]);
