@@ -19,3 +19,8 @@ bin/agent-terminal-*
 
 # Fixture build artifacts
 /tests/fixtures/target/
+
+# Worktree dirs
+/.worktrees/
+/.claude/worktrees/
+
