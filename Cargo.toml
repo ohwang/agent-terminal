@@ -8,6 +8,12 @@ edition = "2021"
 description = "TUI testing tool for autonomous agent-driven terminal application testing"
 license = "MIT"
 repository = "https://github.com/anthropics/agent-terminal"
+homepage = "https://github.com/anthropics/agent-terminal"
+authors = ["Anthropic"]
+keywords = ["tui", "testing", "terminal", "tmux", "automation"]
+categories = ["command-line-utilities", "development-tools::testing"]
+readme = "README.md"
+rust-version = "1.70"
 
 [[bin]]
 name = "agent-terminal"
