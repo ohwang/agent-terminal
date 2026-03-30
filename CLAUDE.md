@@ -2,7 +2,7 @@
 
 ## Project overview
 
-agent-terminal is a Rust CLI tool for autonomous TUI testing via tmux. It provides structured observation (snapshot, screenshot), interaction (send, type, click), and assertion primitives that enable AI agents and developers to test terminal applications end-to-end.
+agent-terminal is a Rust CLI and agent skill for autonomous TUI testing via tmux. It provides structured observation (snapshot, screenshot), interaction (send, type, click), and assertion primitives that enable AI agents and developers to test terminal applications end-to-end.
 
 ## Build & run
 
