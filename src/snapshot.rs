@@ -16,11 +16,26 @@ pub struct Cursor {
 }
 
 #[derive(Serialize)]
+pub struct PaneInfo {
+    pub pane_id: String,
+    pub left: u16,
+    pub top: u16,
+    pub width: u16,
+    pub height: u16,
+    pub title: String,
+    pub active: bool,
+}
+
+#[derive(Serialize)]
 pub struct JsonSnapshot {
     pub session: String,
     pub size: Size,
     pub cursor: Cursor,
     pub lines: Vec<Line>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pane_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub panes: Option<Vec<PaneInfo>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +358,7 @@ fn output_json(
     cx: u16,
     cy: u16,
     session: &str,
+    pane: Option<&str>,
 ) -> Result<(), String> {
     let all_lines: Vec<&str> = ansi_content.lines().collect();
     let lines = trim_trailing_empty(&all_lines);
@@ -360,11 +376,34 @@ fn output_json(
         })
         .collect();
 
+    // Include pane layout when the session has multiple panes.
+    let pane_layouts = list_pane_layouts(session).unwrap_or_default();
+    let (pane_id, panes) = if pane_layouts.len() > 1 {
+        let current_pane_id = pane.map(|p| p.to_string());
+        let pane_infos: Vec<PaneInfo> = pane_layouts
+            .iter()
+            .map(|p| PaneInfo {
+                pane_id: p.pane_id.clone(),
+                left: p.left,
+                top: p.top,
+                width: p.width,
+                height: p.height,
+                title: p.title.clone(),
+                active: p.active,
+            })
+            .collect();
+        (current_pane_id, Some(pane_infos))
+    } else {
+        (None, None)
+    };
+
     let snapshot = JsonSnapshot {
         session: session.to_string(),
         size: Size { cols, rows },
         cursor: Cursor { row: cy, col: cx },
         lines: json_lines,
+        pane_id,
+        panes,
     };
 
     let json = serde_json::to_string_pretty(&snapshot)
@@ -453,7 +492,7 @@ pub fn snapshot(
         };
 
         if json {
-            return output_json(&ansi_content, cols, rows, cx, cy, session);
+            return output_json(&ansi_content, cols, rows, cx, cy, session, pane);
         } else if color {
             output_color(&ansi_content, cols, rows, cx, cy, session);
         } else {
