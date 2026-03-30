@@ -394,9 +394,33 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
     // Query pane layout info
     let pane_layouts = crate::snapshot::list_pane_layouts(session).unwrap_or_default();
 
+    // Read last stderr when process is dead (truncate to avoid huge output).
+    let last_stderr: Option<String> = if !alive {
+        fs::read_to_string(stderr_path(session)).ok().and_then(|s| {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                // Keep last 50 lines max
+                let lines: Vec<&str> = trimmed.lines().collect();
+                if lines.len() > 50 {
+                    Some(lines[lines.len() - 50..].join("\n"))
+                } else {
+                    Some(trimmed.to_string())
+                }
+            }
+        })
+    } else {
+        None
+    };
+
     if json {
         let ec_json = match exit_code {
             Some(c) => c.to_string(),
+            None => "null".to_string(),
+        };
+        let stderr_json = match &last_stderr {
+            Some(s) => serde_json::to_string(s).unwrap_or_else(|_| "null".to_string()),
             None => "null".to_string(),
         };
         let panes_json = if pane_layouts.len() > 1 {
@@ -414,7 +438,7 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
             String::new()
         };
         println!(
-            "{{\"alive\":{alive},\"pid\":{pid},\"exit_code\":{ec_json},\"signal\":null,\"runtime_ms\":{runtime_ms}{panes_json}}}"
+            "{{\"alive\":{alive},\"pid\":{pid},\"exit_code\":{ec_json},\"signal\":null,\"runtime_ms\":{runtime_ms},\"last_stderr\":{stderr_json}{panes_json}}}"
         );
     } else {
         let status_word = if alive { "alive" } else { "dead" };
@@ -427,6 +451,12 @@ pub fn status(session: &str, pane: Option<&str>, json: bool) -> Result<(), Strin
         let secs = runtime_ms / 1000;
         let ms = runtime_ms % 1000;
         println!("Runtime:  {secs}.{ms:03}s");
+        if let Some(ref stderr) = last_stderr {
+            println!("Last stderr:");
+            for line in stderr.lines() {
+                println!("  {line}");
+            }
+        }
         if pane_layouts.len() > 1 {
             println!("Panes:    {}", pane_layouts.len());
             for p in &pane_layouts {
