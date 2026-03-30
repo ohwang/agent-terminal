@@ -134,11 +134,10 @@ pub fn start(
         duration_ms: 0,
     };
     let meta_path = rec_dir.join("meta.json");
-    fs::write(
-        &meta_path,
-        serde_json::to_string_pretty(&meta).unwrap(),
-    )
-    .map_err(|e| format!("Failed to write meta.json: {}", e))?;
+    let meta_json = serde_json::to_string_pretty(&meta)
+        .map_err(|e| format!("Failed to serialize meta.json: {}", e))?;
+    fs::write(&meta_path, meta_json)
+        .map_err(|e| format!("Failed to write meta.json: {}", e))?;
 
     // Create empty actions.jsonl
     fs::write(rec_dir.join("actions.jsonl"), "")
@@ -248,7 +247,9 @@ pub fn stop(session: &str) -> Result<(), String> {
                 meta.duration_ms = duration.num_milliseconds().max(0) as u64;
             }
 
-            let _ = fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap());
+            if let Ok(json) = serde_json::to_string_pretty(&meta) {
+                let _ = fs::write(&meta_path, json);
+            }
 
             println!(
                 "Recording stopped for session '{}': {} frames, {}ms",
@@ -290,7 +291,9 @@ pub fn poll(session: &str, recording_dir: &str, fps: u32) -> Result<(), String> 
         .truncate(true)
         .open(&cast_path)
         .map_err(|e| format!("Failed to create cast file: {}", e))?;
-    writeln!(cast_file, "{}", serde_json::to_string(&header).unwrap())
+    let header_json = serde_json::to_string(&header)
+        .map_err(|e| format!("Failed to serialize cast header: {}", e))?;
+    writeln!(cast_file, "{}", header_json)
         .map_err(|e| format!("Failed to write cast header: {}", e))?;
 
     let mut frames_file = OpenOptions::new()
@@ -349,7 +352,9 @@ pub fn poll(session: &str, recording_dir: &str, fps: u32) -> Result<(), String> 
                 cursor_row: cursor_y,
                 cursor_col: cursor_x,
             };
-            let _ = writeln!(frames_file, "{}", serde_json::to_string(&frame).unwrap());
+            if let Ok(json) = serde_json::to_string(&frame) {
+                let _ = writeln!(frames_file, "{}", json);
+            }
 
             last_plain = plain;
         }
@@ -408,7 +413,9 @@ pub fn list(dir: Option<&str>, json: bool) -> Result<(), String> {
     recordings.sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&recordings).unwrap());
+        let json = serde_json::to_string_pretty(&recordings)
+            .map_err(|e| format!("Failed to serialize recordings: {}", e))?;
+        println!("{}", json);
         return Ok(());
     }
 
@@ -533,7 +540,9 @@ pub fn view(dir: &str, all_frames: bool, json: bool) -> Result<(), String> {
                 }
             }
         }
-        println!("{}", serde_json::to_string_pretty(&events).unwrap());
+        let json = serde_json::to_string_pretty(&events)
+            .map_err(|e| format!("Failed to serialize events: {}", e))?;
+        println!("{}", json);
     } else {
         // Text output
         if let Some(ref m) = meta {
@@ -664,6 +673,8 @@ pub fn log_action(session: &str, command: &str, args: &[String]) {
 
     let actions_path = rec_dir.join("actions.jsonl");
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&actions_path) {
-        let _ = writeln!(file, "{}", serde_json::to_string(&entry).unwrap());
+        if let Ok(json) = serde_json::to_string(&entry) {
+            let _ = writeln!(file, "{}", json);
+        }
     }
 }

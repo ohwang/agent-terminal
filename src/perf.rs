@@ -345,7 +345,9 @@ pub fn latency(key: Option<&str>, samples: u32, json: bool, session: &str) -> Re
     };
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+        let json_str = serde_json::to_string_pretty(&result)
+            .map_err(|e| format!("Failed to serialize latency result: {}", e))?;
+        println!("{}", json_str);
     } else {
         println!("Input latency ({} samples):", result.samples);
         println!("  mean: {:.1}ms", result.mean_ms);
@@ -474,7 +476,10 @@ fn compute_fps_metrics(frames: &[FrameEvent]) -> FpsResult {
 
 fn output_fps_result(result: &FpsResult, json: bool) {
     if json {
-        println!("{}", serde_json::to_string_pretty(result).unwrap());
+        match serde_json::to_string_pretty(result) {
+            Ok(json_str) => println!("{}", json_str),
+            Err(e) => eprintln!("Failed to serialize FPS result: {}", e),
+        }
     } else {
         println!("Performance metrics:");
         println!("  FPS: {:.1}", result.fps);
