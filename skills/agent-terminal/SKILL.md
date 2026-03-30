@@ -1,84 +1,45 @@
 ---
 name: agent-terminal
-description: TUI testing CLI for AI agents. Use when you need to launch, observe, interact with, or test any terminal application — full-screen TUIs (ratatui, bubbletea, textual, ink), REPLs (python, node), curses apps (htop, vim), or CLI tools with interactive prompts. Can record sessions for later replay and human review via a built-in web viewer.
+description: TUI testing CLI for AI agents. Use when you need to launch, observe, interact with, or test any terminal application — full-screen TUIs (ratatui, bubbletea, textual, ink), REPLs (python, node), curses apps (htop, vim), or CLI tools with interactive prompts.
 allowed-tools: Bash(agent-terminal:*), Bash(agent-terminal *)
 ---
 
 # agent-terminal
 
-TUI testing tool for autonomous agent-driven terminal application testing.
-
-**Use when**: You need to launch, observe, interact with, or test any terminal application -- full-screen TUIs (ratatui, bubbletea, textual, ink), REPLs (python, node), curses apps (htop, vim), or CLI tools with interactive prompts. Works by running the app inside a tmux session and giving you structured observation and interaction primitives.
+**Use when**: You need to launch, observe, interact with, or test any terminal application. Works by running the app inside a tmux session with structured observation and interaction primitives.
 
 **Requires**: tmux >= 3.0. Run `agent-terminal doctor` to verify.
 
----
-
 ## The Core Loop
 
-Every interaction follows this pattern. Never deviate.
-
-```
-snapshot -> reason -> act -> wait -> snapshot
-```
-
-**Never fire-and-forget.** Every action (send, type, click, resize) must be followed by a wait and then a snapshot to confirm the result. If you skip the confirmation snapshot, you will drift out of sync with reality.
+Every interaction follows: **act -> wait -> observe**. Never fire-and-forget.
 
 ```bash
-# BEST -- single command: act + wait + snapshot in one turn
+# BEST -- single command: act + wait + observe
 agent-terminal send Enter --session s1 --wait-stable 300
 
-# ALSO CORRECT -- separate commands
-agent-terminal send Enter --session s1
-agent-terminal wait --stable 300 --session s1
-agent-terminal snapshot --session s1
+# Type text and submit in one command
+agent-terminal type "hello world" --enter --wait-stable 300 --session s1
 
-# WRONG -- no confirmation
+# WRONG -- no confirmation after action
 agent-terminal send Enter --session s1
 agent-terminal send "j" --session s1       # you don't know if Enter worked
 ```
 
-Use `--wait-stable` on `send` and `type` to combine the action, wait, and snapshot into a single command. This saves turns and keeps you in sync. For typing text and submitting, use `type --enter --wait-stable`:
-
-```bash
-agent-terminal type "hello world" --enter --wait-stable 300 --session s1
-```
-
----
-
 ## Quick Start
 
-Minimal example testing a TUI app end-to-end:
-
 ```bash
-# 1. Launch the app (default size: 112x30)
 agent-terminal open "./my-app" --session test
 # Output: session=test size=112x30 command=./my-app
 
-# 2. Wait for first render to stabilize
 agent-terminal wait --stable 500 --session test
-
-# 3. See what's on screen
 agent-terminal snapshot --session test
-# Output:
-# [size: 112x30  cursor: 1,0  session: test]
-# ------------------------------------------------
-#   1| Welcome to my-app
-#   2| > Option A
-#   3|   Option B
-#   4|   Option C
-#   5|
-#   6| [q]uit  [Enter] select
 
-# 4. Interact and confirm in one step
 agent-terminal send "j" --session test --wait-stable 200
-# Output: snapshot showing cursor moved to Option B
+# Output: snapshot showing result
 
-# 5. Clean up
 agent-terminal close --session test
 ```
-
----
 
 ## Command Reference
 
@@ -88,7 +49,7 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS\|vertical\|landscape] [--shell] [--no-stderr]` | Launch command in tmux. Default size: 112x30. Presets: `vertical` (80x55), `landscape` (112x30). Prints `session=<s> size=<WxH> command=<cmd>`. |
+| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS\|vertical\|landscape] [--shell] [--no-stderr]` | Launch command in tmux. Default: 112x30. Presets: `vertical` (80x55), `landscape` (112x30). |
 | `close [--session s]` | Kill the session and clean up temp files |
 | `list` | List all active tmux sessions |
 
@@ -97,7 +58,7 @@ All commands default to `--session agent-terminal` if not specified.
 | Command | Description |
 |---------|-------------|
 | `snapshot [--session s] [--pane p] [--color] [--raw] [--ansi] [--json] [--diff] [--scrollback N]` | Capture current terminal content |
-| `screenshot [--session s] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render terminal as PNG or HTML. Default path: `<session>-<YYYYMMDD_HHMMSS>.png` |
+| `screenshot [--session s] [--path f] [--annotate] [--html] [--theme dark\|light]` | Render as PNG or HTML. Default: `<session>-<timestamp>.png` |
 | `scrollback [--session s] [--lines N] [--search "text"]` | Read the tmux scrollback buffer |
 | `find "pattern" [--session s] [--all] [--regex] [--color "style"]` | Search screen for text, return row,col |
 
@@ -105,9 +66,9 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `send <keys>... [--session s] [--pane p] [--wait-stable ms]` | Send named key sequences (e.g., `Enter`, `C-c`, `j`). `--wait-stable` waits then prints snapshot. |
-| `type "text" [--session s] [--pane p] [--enter] [--wait-stable ms]` | Type literal text. `--enter` sends Enter after typing. `--wait-stable` waits then prints snapshot. |
-| `paste "text" [--session s] [--pane p]` | Paste via tmux buffer (safe for special chars) |
+| `send <keys>... [--session s] [--pane p] [--wait-stable ms]` | Send key sequences (e.g., `Enter`, `C-c`, `j`). `--wait-stable` waits then prints snapshot. |
+| `type "text" [--session s] [--pane p] [--enter] [--wait-stable ms]` | Type literal text. `--enter` sends Enter after. `--wait-stable` waits then prints snapshot. |
+| `paste "text" [--session s] [--pane p]` | Paste via tmux buffer (safe for special chars, multi-line) |
 | `resize <cols> <rows> [--session s] [--pane p]` | Resize the terminal |
 | `click <row> <col> [--session s] [--right] [--double]` | Mouse click at position (1-indexed) |
 | `drag <r1> <c1> <r2> <c2> [--session s]` | Mouse drag between positions |
@@ -155,482 +116,52 @@ Default timeout: 10000ms. Default poll interval: 50ms.
 | `clipboard write "text" [--session s]` | Write to the tmux paste buffer |
 | `clipboard paste [--session s]` | Paste from buffer into the pane |
 
-### Performance
-
-| Command | Description |
-|---------|-------------|
-| `perf start [--session s]` | Begin background frame recording |
-| `perf stop [--session s] [--json]` | Stop recording and return FPS metrics |
-| `perf fps --during "cmds" [--session s]` | Measure FPS during a command string |
-| `perf fps --during-batch [--session s]` | Measure FPS during JSON batch from stdin |
-| `perf fps --duration <ms> [--session s]` | Passively observe FPS for N ms |
-| `perf latency [--session s] [--key k] [--samples N] [--json]` | Measure keystroke-to-render latency |
-
 ### Recording & Replay
 
 | Command | Description |
 |---------|-------------|
-| `record start [--session s] [--group g] [--label l] [--fps N] [--dir path]` | Start recording a session (background poller) |
-| `record stop [--session s]` | Stop recording, finalize metadata |
-| `record list [--dir path] [--json]` | List all recordings, grouped by group name |
+| `record start [--session s] [--group g] [--label l] [--fps N] [--dir path]` | Start recording (background poller) |
+| `record stop [--session s]` | Stop recording. Prints recording dir path. |
+| `record list [--dir path] [--json]` | List all recordings |
 | `record view --dir path [--all-frames] [--json]` | View recording as chronological text stream |
-| `web [--dir path] [--port 8080]` | Launch web viewer for browsing and replaying recordings |
+| `web [--dir path] [--port 8080]` | Web viewer for visual replay |
 
-Recordings are saved to `~/.agent-terminal/recordings/{group}/` by default. Each recording produces three files:
-- `recording.cast` -- asciinema v2 format (visual replay with colors)
-- `frames.jsonl` -- plain-text snapshots per frame (AI-readable)
-- `actions.jsonl` -- agent-terminal commands logged during recording
-
-### Environment & Testing
+### Performance & Testing
 
 | Command | Description |
 |---------|-------------|
+| `perf start/stop [--session s] [--json]` | Background frame recording with FPS metrics |
+| `perf fps --duration <ms> [--session s]` | Passive FPS observation |
+| `perf latency [--session s] [--key k] [--samples N] [--json]` | Keystroke-to-render latency |
+| `test-matrix --command "cmd" --test "cmds" [--sizes] [--terms] [--colors]` | Test across terminal configurations |
 | `doctor` | Validate tmux version and capabilities |
-| `init` | Detect framework and generate starter test |
-| `test-matrix --command "cmd" --test "cmds" [--sizes] [--terms] [--colors]` | Run tests across terminal configurations |
-| `a11y-check "command"` | Accessibility audit (NO_COLOR, TERM=dumb, resize) |
-| `watch [--interval ms] [--filter prefix]` | Live dashboard showing all active sessions (interactive, not for scripts) |
-
----
+| `watch [--interval ms] [--filter prefix]` | Live dashboard (interactive) |
 
 ## Failure Recovery
 
-When things go wrong, follow this flowchart:
-
-### "Snapshot shows nothing / stale content"
-
+**Snapshot shows nothing / stale content:**
 ```bash
-# 1. Check if the process is alive
 agent-terminal status --session s1 --json
-
-# 2a. If alive=false: read the crash output
+# If alive=false: check logs and exit code
 agent-terminal logs --stderr --session s1
-agent-terminal exit-code --session s1
-# -> Fix the bug, then re-open
-
-# 2b. If alive=true: the app may be waiting for input or still loading
+# If alive=true: app may still be loading
 agent-terminal wait --stable 1000 --session s1 --timeout 15000
 ```
 
-### "wait timed out"
+**wait timed out:** The error includes the last snapshot. Common causes: wrong expected text, animation/spinner (use longer `--stable`), or app crashed (check `status`).
 
-The error message includes the last snapshot and session diagnostics. Read them.
+**Session already exists:** `agent-terminal close --session s1` then re-open.
 
-```bash
-# The wait error shows what was on screen. Common causes:
-# 1. Text never appeared -> wrong expected text, or app is in wrong state
-# 2. Screen kept changing -> animation/spinner, use a longer --stable window
-# 3. App crashed mid-wait -> check status
+## Key Distinctions
 
-agent-terminal status --session s1 --json
-# If dead: agent-terminal logs --stderr --session s1
-# If alive: agent-terminal snapshot --session s1  # see what's actually there
-```
+- **`send` vs `type`**: `send "Enter"` sends the Enter key. `type "Enter"` types the letters E-n-t-e-r. Use `type` for text input, `send` for key presses.
+- **`send "C-c"` vs `signal SIGINT`**: `send` goes through the app's input handler. `signal` bypasses it. Usually prefer `send "C-c"`.
+- **Full-screen TUI vs scrolling CLI**: Full-screen apps (ratatui, vim) -- `snapshot` captures everything, scrollback is useless. Scrolling apps (REPL, build output) -- use `scrollback --lines N` or `snapshot --scrollback N` for history.
+- **`paste` vs `type`**: Use `paste` for multi-line text or special characters. Use `type` for simple single-line input.
 
-### "Session already exists"
+## Reference Docs
 
-```bash
-# Close the old one first
-agent-terminal close --session s1
-agent-terminal open "./my-app" --session s1
-```
-
-### "App seems to ignore my keystrokes"
-
-```bash
-# 1. Make sure the app is focused (not a shell prompt)
-agent-terminal snapshot --session s1
-
-# 2. Use 'type' for literal text, 'send' for key names
-agent-terminal type "hello" --enter --session s1   # types h-e-l-l-o then Enter
-agent-terminal send "Enter" --session s1           # sends the Enter key
-
-# 3. For special characters in text, use paste
-agent-terminal paste "line1\nline2" --session s1
-
-# 4. Check if the app needs mouse mode
-agent-terminal click 3 10 --session s1
-```
-
-### "Colors/styles not what I expected"
-
-```bash
-# Use --color for annotated view
-agent-terminal snapshot --color --session s1
-# Shows: [fg:red bold] annotations per line
-
-# Use --json for precise spans
-agent-terminal snapshot --json --session s1
-
-# Assert specific styles
-agent-terminal assert --style "Error" --style-check "fg:red" --session s1
-```
-
----
-
-## Framework-Specific Tips
-
-### Ratatui (Rust)
-
-```bash
-agent-terminal open "cargo run --release" --session rui
-agent-terminal wait --stable 500 --session rui
-
-# Key bindings are usually single characters
-agent-terminal send "j" --session rui --wait-stable 200   # down (vim-style)
-agent-terminal send "q" --session rui                      # quit
-
-# Test resize -- ratatui apps should handle SIGWINCH
-agent-terminal resize 40 10 --session rui
-agent-terminal wait --stable 300 --session rui
-agent-terminal snapshot --session rui     # verify layout adapted
-```
-
-### Bubbletea (Go)
-
-```bash
-# Bubbletea apps need time for the initial tea.Program render
-agent-terminal open "go run ." --session bt
-agent-terminal wait --stable 1000 --session bt   # generous first wait
-
-# Bubbletea uses the Elm architecture -- state updates are async
-agent-terminal send "j" --session bt --wait-stable 200
-
-# Mouse support: most bubbletea apps using lipgloss support mouse
-agent-terminal click 5 10 --session bt
-agent-terminal wait --stable 200 --session bt
-
-# Test NO_COLOR compliance (bubbletea/lipgloss respects this)
-agent-terminal close --session bt
-agent-terminal open "go run ." --session bt --env NO_COLOR=1
-```
-
-### Textual (Python)
-
-```bash
-# Textual has a CSS-based styling warmup period
-agent-terminal open "python -m my_app" --session tx
-agent-terminal wait --stable 1500 --session tx   # CSS rendering needs time
-
-# Textual apps heavily use mouse -- test click targets
-agent-terminal click 3 20 --session tx
-agent-terminal wait --stable 300 --session tx
-
-# Use type --enter for search/input widgets
-agent-terminal type "search term" --enter --session tx --wait-stable 300
-
-# Test with NO_COLOR (textual should degrade gracefully)
-agent-terminal close --session tx
-agent-terminal open "python -m my_app" --session tx --env NO_COLOR=1
-agent-terminal wait --stable 1500 --session tx
-agent-terminal snapshot --color --session tx   # verify no color codes
-```
-
-### Ink (React for CLI)
-
-```bash
-# Ink apps are Node.js -- may need build step
-agent-terminal open "npx tsx src/index.tsx" --session ink
-agent-terminal wait --stable 1000 --session ink
-
-# Ink re-renders on state change
-agent-terminal send "j" --session ink --wait-stable 300
-
-# Ink apps often use Tab for navigation
-agent-terminal send "Tab" --session ink --wait-stable 200
-
-# Test with CI=true (common env var that affects ink rendering)
-agent-terminal close --session ink
-agent-terminal open "npx tsx src/index.tsx" --session ink --env CI=true
-```
-
----
-
-## Scrolling CLI vs Full-Screen TUI
-
-These require different strategies.
-
-### Full-Screen TUI (ratatui, bubbletea, textual, htop, vim)
-
-Full-screen apps use the alternate screen buffer. The visible viewport IS the entire state.
-
-```bash
-# snapshot captures everything -- no scrollback needed
-agent-terminal snapshot --session s1
-
-# Navigation is via app keys (j/k, arrows, PgUp/PgDn)
-agent-terminal send "G" --session s1 --wait-stable 200   # vim-style go to bottom
-
-# Scrollback buffer is NOT useful for full-screen apps
-# (it contains pre-TUI shell output, not app content)
-```
-
-### Scrolling CLI (build output, REPL, logs)
-
-Scrolling apps write to stdout and content scrolls off the top.
-
-```bash
-# snapshot only shows the visible viewport (last N rows)
-agent-terminal snapshot --session s1
-
-# Use scrollback to see history
-agent-terminal scrollback --lines 500 --session s1
-
-# Search scrollback for specific output
-agent-terminal scrollback --search "error" --session s1
-
-# Include scrollback in a snapshot
-agent-terminal snapshot --scrollback 100 --session s1
-```
-
----
-
-## Performance Testing Pattern
-
-Use start/stop mode across multiple tool calls (recommended for Claude Code):
-
-```bash
-# 1. Open and stabilize
-agent-terminal open "./my-app" --session perf
-agent-terminal wait --stable 500 --session perf
-
-# 2. Start recording
-agent-terminal perf start --session perf
-
-# 3. Perform interactions (each is a separate tool call)
-agent-terminal send "j" --session perf
-agent-terminal send "j" --session perf
-agent-terminal send "j" --session perf
-agent-terminal send "G" --session perf
-
-# 4. Stop and get metrics
-agent-terminal perf stop --json --session perf
-# Returns: { "fps": 24.5, "frame_count": 12, "p95_frame_ms": 88, ... }
-
-# 5. Measure input latency separately
-agent-terminal perf latency --key "j" --samples 5 --json --session perf
-# Returns: { "mean_ms": 18, "p95_ms": 38, ... }
-
-# 6. Interpret results
-#    FPS: 0 = frozen, 1-5 = sluggish, 10-30 = normal
-#    Latency: <16ms = excellent, 16-50ms = good, 50-100ms = noticeable, >100ms = sluggish
-
-agent-terminal close --session perf
-```
-
-For quick one-shot measurement:
-
-```bash
-agent-terminal perf fps --duration 3000 --session perf    # passive observation
-agent-terminal perf fps --during 'send "j" && send "k"' --session perf  # during actions
-```
-
----
-
-## Matrix Testing Pattern
-
-Test your app across terminal sizes, TERM values, and color modes in one command:
-
-```bash
-agent-terminal test-matrix \
-  --command "./my-app" \
-  --sizes "80x24,120x40,40x10" \
-  --terms "xterm-256color,dumb" \
-  --colors "default,NO_COLOR=1" \
-  --test "agent-terminal assert --text 'Welcome' --session {session}; agent-terminal status --session {session} --json"
-```
-
-This runs 12 combinations (3 sizes x 2 terms x 2 colors) and reports:
-
-```
-COMBINATION                              RESULT
-------------------------------------------------------------
-80x24+xterm-256color+default             pass
-80x24+xterm-256color+NO_COLOR=1          pass
-80x24+dumb+default                       FAIL: Process crashed during startup
-40x10+xterm-256color+default             FAIL: text "Welcome" not found
-...
-
-10/12 passed, 2 failed
-Failure snapshots saved to: ./agent-terminal-matrix/
-```
-
-Use `{session}` in test commands -- it gets replaced with the per-combination session name.
-
-**When to use test-matrix**: after you have a working app and want to verify it handles edge cases. Not for initial development.
-
----
-
-## Recording Sessions for Review
-
-Use recording to capture before/after sessions for human review. This is especially useful when making many autonomous changes -- humans can review each recording to verify improvements.
-
-### Before/After Pattern
-
-```bash
-# 1. Open the app and start recording the "before" state
-agent-terminal open "./my-app" --session app
-agent-terminal wait --stable 500 --session app
-agent-terminal record start --session app --group "fix-42" --label "before"
-
-# 2. Interact to demonstrate the current (buggy) behavior
-agent-terminal send "j" --session app --wait-stable 200   # observe the bug
-
-# 3. Stop recording and review
-agent-terminal record stop --session app
-# Output: Recording dir: ~/.agent-terminal/recordings/fix-42/...
-agent-terminal close --session app
-
-# ... make code changes ...
-
-# 4. Record the "after" state
-agent-terminal open "./my-app" --session app
-agent-terminal wait --stable 500 --session app
-agent-terminal record start --session app --group "fix-42" --label "after"
-
-# 5. Demonstrate the fix
-agent-terminal send "j" --session app --wait-stable 200   # observe the fix
-
-# 6. Stop, review, and clean up
-agent-terminal record stop --session app
-# Use record view to review: agent-terminal record view --dir <path from above>
-agent-terminal close --session app
-```
-
-### Key Points
-
-- **`--group`** ties related recordings together (e.g., all recordings for one bug fix)
-- **`--label`** distinguishes recordings within a group (e.g., "before", "after", "attempt-2")
-- **Actions are auto-logged.** Every `send`, `type`, `click`, `wait`, etc. during recording is captured with timestamps
-- **Frames are deduplicated.** Only screen changes are recorded, so idle screens don't bloat the file
-- **Three output formats**: `.cast` (visual replay for humans), `frames.jsonl` (plain text for AI), `actions.jsonl` (what the agent did)
-
-### Reviewing Recordings
-
-```bash
-# List all recordings
-agent-terminal record list
-
-# Launch the web viewer
-agent-terminal web --port 8080
-# Opens a dashboard at http://localhost:8080 showing all recordings
-# grouped by group name, with a player that shows terminal replay
-# alongside a timeline of agent actions
-```
-
-### AI Review of Recordings
-
-Use `record view` to review a recording directly in the terminal. The `record stop` command prints the recording directory path — pass it to `record view`:
-
-```bash
-# Stop recording — note the "Recording dir:" path in the output
-agent-terminal record stop --session app
-# Output:
-#   Recording stopped for session 'app': 25 frames, 5123ms
-#   Recording dir: /home/user/.agent-terminal/recordings/fix-42/20260324_143022_app_before
-
-# View key frames (frame before each action, frame after, final frame)
-agent-terminal record view --dir /home/user/.agent-terminal/recordings/fix-42/20260324_143022_app_before
-
-# View all frames with actions interleaved chronologically
-agent-terminal record view --dir /path/to/recording --all-frames
-
-# Get structured JSON output
-agent-terminal record view --dir /path/to/recording --json
-```
-
-The default mode shows only **key frames**: the screen state immediately before each action, immediately after, and the final frame. This gives a compact action-reaction view without token-heavy intermediate frames. Use `--all-frames` when you need the complete timeline (e.g., to see animations or streaming output between actions).
-
-### Custom Recording Directory
-
-```bash
-# Save recordings to a project-specific location
-agent-terminal record start --session app --group "feature" --dir ./recordings
-agent-terminal record list --dir ./recordings
-agent-terminal web --dir ./recordings
-```
-
----
-
-## Common Mistakes
-
-**1. Forgetting to wait after actions**
-```bash
-# WRONG
-agent-terminal send "j" --session s1
-agent-terminal snapshot --session s1    # may capture pre-action state
-
-# BEST -- single command with built-in wait
-agent-terminal send "j" --session s1 --wait-stable 200
-
-# ALSO RIGHT -- separate commands
-agent-terminal send "j" --session s1
-agent-terminal wait --stable 200 --session s1
-agent-terminal snapshot --session s1
-```
-
-**2. Using `send` when you mean `type`**
-```bash
-# send interprets key names: "Enter" sends the Enter key
-agent-terminal send "Enter" --session s1
-
-# type sends literal characters: types E-n-t-e-r
-agent-terminal type "Enter" --session s1
-
-# For typing text and submitting, use type --enter
-agent-terminal type "hello world" --enter --session s1
-
-# Or combine everything: type, enter, and wait for result
-agent-terminal type "hello world" --enter --wait-stable 300 --session s1
-```
-
-**3. Not checking process health when things seem stuck**
-```bash
-# If snapshot shows stale content, ALWAYS check status first
-agent-terminal status --session s1 --json
-# { "alive": false, "exit_code": 1 }
-agent-terminal logs --stderr --session s1
-# panic at src/main.rs:42: index out of bounds
-```
-
-**4. Hardcoding waits instead of using conditions**
-```bash
-# WRONG -- fragile, wastes time
-agent-terminal wait 3000 --session s1
-
-# RIGHT -- fast and reliable
-agent-terminal wait --text "Ready" --session s1
-agent-terminal wait --stable 500 --session s1
-```
-
-**5. Not using unique session names for parallel tests**
-```bash
-# WRONG -- tests collide
-agent-terminal open "./app" --session test
-# ...in another test...
-agent-terminal open "./app" --session test   # ERROR: already exists
-
-# RIGHT -- unique names
-agent-terminal open "./app" --session "test-$$"    # PID-scoped in bash
-agent-terminal open "./app" --session "test-resize"
-agent-terminal open "./app" --session "test-input"
-```
-
-**6. Not cleaning up sessions**
-```bash
-# Always use trap in bash scripts
-cleanup() { agent-terminal close --session "$SESSION" 2>/dev/null || true; }
-trap cleanup EXIT
-```
-
-**7. Sending Ctrl+C with `send` vs `signal`**
-```bash
-# send "C-c" sends the keystroke -- app's input handler processes it
-agent-terminal send "C-c" --session s1
-
-# signal SIGINT sends the actual signal -- bypasses app input
-agent-terminal signal SIGINT --session s1
-
-# Usually you want send "C-c" for graceful app shutdown
-# Use signal SIGINT for testing signal handlers specifically
-```
+For detailed guides on specific topics, read:
+- `references/recording.md` -- session recording, before/after pattern, reviewing recordings
+- `references/performance.md` -- FPS measurement, latency testing, interpreting results
+- `references/matrix-testing.md` -- cross-configuration testing
