@@ -55,7 +55,7 @@ All commands default to `--session agent-terminal` if not specified.
 
 | Command | Description |
 |---------|-------------|
-| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS\|vertical\|landscape] [--shell] [--no-stderr]` | Launch command in tmux. Default: 112x30. Presets: `vertical` (80x55), `landscape` (112x30). |
+| `open "<cmd>" [--session s] [--pane p] [--env K=V]... [--size COLSxROWS\|vertical\|landscape] [--shell] [--no-stderr] [--replace]` | Launch command in tmux. Default: 112x30. Presets: `vertical` (80x55), `landscape` (112x30). `--replace` kills any existing session with the same name first. |
 | `close [--session s]` | Kill the session and clean up temp files |
 | `list` | List all active tmux sessions (shows PANES column for multi-pane sessions) |
 
@@ -166,7 +166,7 @@ agent-terminal wait --stable 1000 --session s1 --timeout 15000
 agent-terminal wait --text-any "Success" "Error:" "Failed" --session s1
 ```
 
-**Session already exists:** `agent-terminal close --session s1` then re-open.
+**Session already exists:** Use `--replace` to kill and re-open in one call: `agent-terminal open "./app" --session s1 --replace`.
 
 ## Key Distinctions
 
