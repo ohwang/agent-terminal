@@ -161,6 +161,7 @@ fn session_created_ts(session: &str) -> Result<u64, String> {
 // ---------------------------------------------------------------------------
 
 /// Launch a command in a new (or split) tmux session.
+#[allow(clippy::too_many_arguments)]
 pub fn open(
     command: &str,
     session: &str,
