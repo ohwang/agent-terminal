@@ -169,6 +169,7 @@ pub fn open(
     size: Option<&str>,
     shell: bool,
     no_stderr: bool,
+    replace: bool,
 ) -> Result<(), String> {
     // Build the env export prefix.
     let mut env_prefix = String::new();
@@ -218,9 +219,13 @@ pub fn open(
     } else {
         // Create a brand-new detached session.
         if session_exists(session) {
-            return Err(format!(
-                "Session '{session}' already exists. Close it first or use a different name."
-            ));
+            if replace {
+                close(session)?;
+            } else {
+                return Err(format!(
+                    "Session '{session}' already exists. Close it first or use --replace."
+                ));
+            }
         }
         // Parse size for new-session -x/-y (supports presets or COLSxROWS)
         let mut new_session_args = vec!["new-session", "-d", "-s", session];
@@ -931,6 +936,7 @@ pub fn test_matrix(
             Some(entry.size),
             false,
             false,
+            false,
         );
         if let Err(e) = open_result {
             results.push(MatrixResult {
@@ -1112,7 +1118,16 @@ pub fn a11y_check(command: &str) -> Result<(), String> {
                 let _ = close(session);
             }
 
-            open(command, session, None, envs, Some(size), false, false)?;
+            open(
+                command,
+                session,
+                None,
+                envs,
+                Some(size),
+                false,
+                false,
+                false,
+            )?;
             thread::sleep(Duration::from_millis(1000));
 
             let alive = get_pane_pid(session, None)

@@ -47,6 +47,9 @@ enum Commands {
         /// Don't capture stderr (needed for bash/readline apps)
         #[arg(long)]
         no_stderr: bool,
+        /// Replace existing session with the same name (kills it first)
+        #[arg(long)]
+        replace: bool,
     },
     /// Kill a tmux session
     Close {
@@ -706,6 +709,7 @@ fn main() {
             size,
             shell,
             no_stderr,
+            replace,
         } => session::open(
             &command,
             &session,
@@ -714,6 +718,7 @@ fn main() {
             size.as_deref(),
             shell,
             no_stderr,
+            replace,
         ),
         Commands::Close { session } => session::close(&session),
         Commands::List => session::list(),
