@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::process::Command;
 
-pub use crate::ansi::{dominant_style, parse_ansi, parse_ansi_line, Line, Span, Style};
+pub use crate::ansi::{dominant_style, parse_ansi, parse_ansi_line, Line, Style};
 
 #[derive(Serialize)]
 pub struct Size {
